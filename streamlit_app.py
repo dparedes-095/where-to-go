@@ -1,5 +1,6 @@
 import random
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 
@@ -86,11 +87,11 @@ def parse_words(word_text):
     ]
 
 
-def generate_card(words):
+def generate_board_matrix(words):
     needed_words = BOARD_SIZE * BOARD_SIZE - 1
     selected = random.sample(words, needed_words)
 
-    card = []
+    board = []
     word_index = 0
 
     for row in range(BOARD_SIZE):
@@ -98,48 +99,59 @@ def generate_card(words):
 
         for col in range(BOARD_SIZE):
             if row == 2 and col == 2:
-                current_row.append(FREE_SPACE)
+                current_row.append({
+                    "word": FREE_SPACE,
+                    "marked": True,
+                    "called": True,
+                    "free": True,
+                })
             else:
-                current_row.append(selected[word_index])
+                current_row.append({
+                    "word": selected[word_index],
+                    "marked": False,
+                    "called": False,
+                    "free": False,
+                })
                 word_index += 1
 
-        card.append(current_row)
+        board.append(current_row)
 
-    return card
-
-
-def create_marked_board():
-    marked = [[False for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
-    marked[2][2] = True
-    return marked
+    return board
 
 
-def check_win(marked, game_mode):
+def is_marked(board, row, col):
+    return board[row][col]["marked"]
+
+
+def check_win(board, game_mode):
+    if board is None:
+        return False
+
     if game_mode == "4 Corners":
         return (
-            marked[0][0]
-            and marked[0][BOARD_SIZE - 1]
-            and marked[BOARD_SIZE - 1][0]
-            and marked[BOARD_SIZE - 1][BOARD_SIZE - 1]
+            is_marked(board, 0, 0)
+            and is_marked(board, 0, BOARD_SIZE - 1)
+            and is_marked(board, BOARD_SIZE - 1, 0)
+            and is_marked(board, BOARD_SIZE - 1, BOARD_SIZE - 1)
         )
 
     if game_mode == "1 Row, Column, or Diagonal":
         # Rows
-        for row in marked:
-            if all(row):
+        for row in range(BOARD_SIZE):
+            if all(is_marked(board, row, col) for col in range(BOARD_SIZE)):
                 return True
 
         # Columns
         for col in range(BOARD_SIZE):
-            if all(marked[row][col] for row in range(BOARD_SIZE)):
+            if all(is_marked(board, row, col) for row in range(BOARD_SIZE)):
                 return True
 
         # Diagonal: top-left to bottom-right
-        if all(marked[i][i] for i in range(BOARD_SIZE)):
+        if all(is_marked(board, i, i) for i in range(BOARD_SIZE)):
             return True
 
         # Diagonal: top-right to bottom-left
-        if all(marked[i][BOARD_SIZE - 1 - i] for i in range(BOARD_SIZE)):
+        if all(is_marked(board, i, BOARD_SIZE - 1 - i) for i in range(BOARD_SIZE)):
             return True
 
         return False
@@ -147,9 +159,9 @@ def check_win(marked, game_mode):
     if game_mode == "Blackout - All But 1":
         marked_count = sum(
             1
-            for row in marked
-            for value in row
-            if value
+            for row in range(BOARD_SIZE)
+            for col in range(BOARD_SIZE)
+            if board[row][col]["marked"]
         )
 
         # 25 total spaces, FREE space already counts as marked.
@@ -160,16 +172,31 @@ def check_win(marked, game_mode):
 
 
 def reset_card(words, preset_name):
-    st.session_state.card = generate_card(words)
-    st.session_state.marked = create_marked_board()
+    st.session_state.board = generate_board_matrix(words)
     st.session_state.active_card_preset = preset_name
     st.session_state.card_word_snapshot = words.copy()
+    st.session_state.game_over = False
+    st.session_state.show_win_balloons = False
 
 
 def reset_called_words():
     st.session_state.called_words = []
     st.session_state.current_called_word = None
     st.session_state.last_called_at = None
+    st.session_state.game_over = False
+    st.session_state.show_win_balloons = False
+
+    if st.session_state.board is not None:
+        for row in range(BOARD_SIZE):
+            for col in range(BOARD_SIZE):
+                cell = st.session_state.board[row][col]
+
+                if cell["free"]:
+                    cell["called"] = True
+                    cell["marked"] = True
+                else:
+                    cell["called"] = False
+                    cell["marked"] = False
 
 
 def call_random_word(words):
@@ -186,9 +213,101 @@ def call_random_word(words):
 
     st.session_state.called_words.append(picked_word)
     st.session_state.current_called_word = picked_word
-    st.session_state.last_called_at = datetime.now().strftime("%I:%M:%S %p")
+    st.session_state.last_called_at = datetime.now(
+        ZoneInfo("America/New_York")
+    ).strftime("%I:%M:%S %p EST")
+
+    # Update board matrix.
+    # Called words also become marked so rules can end the game.
+    if st.session_state.board is not None:
+        for row in range(BOARD_SIZE):
+            for col in range(BOARD_SIZE):
+                cell = st.session_state.board[row][col]
+
+                if cell["word"] == picked_word:
+                    cell["called"] = True
+                    cell["marked"] = True
+
+    if check_win(st.session_state.board, st.session_state.game_mode):
+        st.session_state.game_over = True
+        st.session_state.show_win_balloons = True
 
     return picked_word
+
+
+def build_tile_label(word, is_marked, is_called):
+    if word == FREE_SPACE:
+        return f"⭐\n{word}"
+
+    if is_marked:
+        return f"✅\n{word}"
+
+    if is_called:
+        return f"🎯\n{word}"
+
+    return f"⬜\n{word}"
+
+
+def inject_board_button_colors():
+    """
+    Uses Streamlit widget keys to target the actual st.button face.
+    Marked and FREE cells turn green.
+    Called but unmarked cells turn amber.
+    """
+    if st.session_state.board is None:
+        return
+
+    css_lines = ["<style>"]
+
+    for row in range(BOARD_SIZE):
+        for col in range(BOARD_SIZE):
+            cell = st.session_state.board[row][col]
+            word = cell["word"]
+            is_marked_cell = cell["marked"]
+            is_called_cell = cell["called"]
+            key_class = f".st-key-cell_{row}_{col}"
+
+            if word == FREE_SPACE or is_marked_cell:
+                css_lines.append(
+                    f"""
+                    {key_class} button {{
+                        background: rgba(0, 180, 95, 0.38) !important;
+                        border: 1px solid rgba(0, 230, 130, 0.95) !important;
+                        color: white !important;
+                        box-shadow: 0 0 18px rgba(0, 220, 120, 0.30) !important;
+                    }}
+
+                    {key_class} button p {{
+                        color: white !important;
+                    }}
+                    """
+                )
+
+            elif is_called_cell:
+                css_lines.append(
+                    f"""
+                    {key_class} button {{
+                        background: rgba(255, 190, 0, 0.24) !important;
+                        border: 1px solid rgba(255, 220, 90, 0.85) !important;
+                        box-shadow: 0 0 14px rgba(255, 200, 0, 0.20) !important;
+                    }}
+                    """
+                )
+
+    css_lines.append("</style>")
+    st.markdown("\n".join(css_lines), unsafe_allow_html=True)
+
+
+def get_marked_count(board):
+    if board is None:
+        return 0
+
+    return sum(
+        1
+        for row in range(BOARD_SIZE)
+        for col in range(BOARD_SIZE)
+        if board[row][col]["marked"]
+    )
 
 
 # -----------------------------
@@ -199,11 +318,8 @@ if "active_word_preset" not in st.session_state:
     st.session_state.active_word_preset = first_preset
     st.session_state.word_text = "\n".join(PRESETS[first_preset])
 
-if "card" not in st.session_state:
-    st.session_state.card = None
-
-if "marked" not in st.session_state:
-    st.session_state.marked = create_marked_board()
+if "board" not in st.session_state:
+    st.session_state.board = None
 
 if "called_words" not in st.session_state:
     st.session_state.called_words = []
@@ -220,9 +336,15 @@ if "auto_call_tick" not in st.session_state:
 if "game_mode" not in st.session_state:
     st.session_state.game_mode = "1 Row, Column, or Diagonal"
 
+if "game_over" not in st.session_state:
+    st.session_state.game_over = False
+
+if "show_win_balloons" not in st.session_state:
+    st.session_state.show_win_balloons = False
+
 
 # -----------------------------
-# Styling
+# Base Styling
 # -----------------------------
 st.markdown(
     """
@@ -242,14 +364,15 @@ st.markdown(
 
     .caller-card {
         text-align: center;
-        font-size: 2.2rem;
+        font-size: 2.3rem;
         font-weight: 900;
         padding: 1.4rem;
-        border-radius: 22px;
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.20);
+        border-radius: 24px;
+        background: rgba(255,255,255,0.09);
+        border: 1px solid rgba(255,255,255,0.22);
         margin-top: 0.5rem;
         margin-bottom: 1rem;
+        box-shadow: 0 8px 22px rgba(0,0,0,0.16);
     }
 
     .caller-empty {
@@ -267,19 +390,39 @@ st.markdown(
     .bingo-header {
         text-align: center;
         font-weight: 900;
-        font-size: 1.4rem;
+        font-size: 1.45rem;
         padding: 0.5rem;
-        border-radius: 12px;
-        background: rgba(255,255,255,0.08);
+        border-radius: 14px;
+        background: rgba(255,255,255,0.10);
+        border: 1px solid rgba(255,255,255,0.18);
         margin-bottom: 0.5rem;
     }
 
+    /*
+      Base button style.
+      State-specific colors are injected later using each button key.
+    */
     div[data-testid="stButton"] > button {
-        min-height: 76px;
-        white-space: normal;
-        border-radius: 16px;
-        font-weight: 800;
-        line-height: 1.15;
+        min-height: 92px;
+        white-space: pre-line;
+        border-radius: 18px;
+        font-weight: 850;
+        line-height: 1.12;
+        border: 1px solid rgba(255,255,255,0.22);
+        background: rgba(255,255,255,0.065);
+        box-shadow: 0 5px 14px rgba(0,0,0,0.12);
+        transition: transform 0.08s ease, border 0.08s ease, background 0.08s ease, box-shadow 0.08s ease;
+    }
+
+    div[data-testid="stButton"] > button:hover {
+        transform: translateY(-1px) scale(1.015);
+        border: 1px solid rgba(255,255,255,0.45);
+        background: rgba(255,255,255,0.11);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.16);
+    }
+
+    div[data-testid="stButton"] > button:active {
+        transform: scale(0.98);
     }
 
     .bingo-status {
@@ -293,6 +436,17 @@ st.markdown(
         border: 1px solid rgba(0, 200, 120, 0.35);
     }
 
+    .game-over-note {
+        text-align: center;
+        font-size: 1rem;
+        font-weight: 700;
+        padding: 0.8rem;
+        border-radius: 16px;
+        background: rgba(0, 200, 120, 0.10);
+        border: 1px solid rgba(0, 200, 120, 0.25);
+        margin-bottom: 1rem;
+    }
+
     .empty-card {
         text-align: center;
         padding: 2rem;
@@ -301,11 +455,12 @@ st.markdown(
         border: 1px dashed rgba(255,255,255,0.25);
     }
 
-    .small-note {
+    .tiny-center-note {
         text-align: center;
         opacity: 0.75;
         font-size: 0.9rem;
-        margin-bottom: 0.5rem;
+        margin-top: -0.3rem;
+        margin-bottom: 0.7rem;
     }
     </style>
     """,
@@ -337,8 +492,7 @@ with st.sidebar:
     if st.session_state.active_word_preset != preset:
         st.session_state.active_word_preset = preset
         st.session_state.word_text = "\n".join(PRESETS[preset])
-        st.session_state.card = None
-        st.session_state.marked = create_marked_board()
+        st.session_state.board = None
         reset_called_words()
 
     st.divider()
@@ -378,14 +532,21 @@ with st.sidebar:
             reset_called_words()
 
     if st.button("🧼 Clear Marks", use_container_width=True):
-        st.session_state.marked = create_marked_board()
+        if st.session_state.board is not None:
+            for row in range(BOARD_SIZE):
+                for col in range(BOARD_SIZE):
+                    cell = st.session_state.board[row][col]
+                    cell["marked"] = cell["free"]
+
+        st.session_state.game_over = False
+        st.session_state.show_win_balloons = False
 
     if st.button("🔄 Reset Called Words", use_container_width=True):
         reset_called_words()
 
 
-# Auto-create first card once if possible
-if st.session_state.card is None and len(custom_words) >= 24:
+# Auto-create first board once if possible
+if st.session_state.board is None and len(custom_words) >= 24:
     reset_card(custom_words, st.session_state.active_word_preset)
 
 
@@ -398,7 +559,8 @@ st.session_state.game_mode = st.radio(
     "Win condition",
     GAME_MODES,
     index=GAME_MODES.index(st.session_state.game_mode),
-    horizontal=False
+    horizontal=True,
+    disabled=st.session_state.game_over
 )
 
 if st.session_state.game_mode == "4 Corners":
@@ -421,26 +583,34 @@ st.subheader("🎤 Word Caller")
 caller_mode = st.radio(
     "Caller mode",
     ["Manual Button", "Auto Every 20 Seconds", "Auto Every 30 Seconds"],
-    horizontal=True
+    horizontal=True,
+    disabled=st.session_state.game_over
 )
 
 caller_col_1, caller_col_2 = st.columns(2)
 
 with caller_col_1:
-    if st.button("🎲 Call Random Word", use_container_width=True):
-        if len(custom_words) == 0:
-            st.warning("Add words first.")
-        else:
-            picked = call_random_word(custom_words)
-            if picked is None:
-                st.info("All words have already been called.")
+    if st.session_state.game_over:
+        st.button("🎲 Call Random Word", use_container_width=True, disabled=True)
+    else:
+        if st.button("🎲 Call Random Word", use_container_width=True):
+            if len(custom_words) == 0:
+                st.warning("Add words first.")
+            else:
+                picked = call_random_word(custom_words)
+
+                if picked is None:
+                    st.info("All words have already been called.")
+
+                if st.session_state.game_over:
+                    st.rerun()
 
 with caller_col_2:
     st.caption(f"Called words: {len(st.session_state.called_words)} / {len(custom_words)}")
 
 
 # Auto caller
-if caller_mode != "Manual Button":
+if caller_mode != "Manual Button" and not st.session_state.game_over:
     if AUTO_REFRESH_AVAILABLE:
         seconds = 20 if caller_mode == "Auto Every 20 Seconds" else 30
 
@@ -458,6 +628,9 @@ if caller_mode != "Manual Button":
                 if picked is None:
                     st.info("All words have already been called.")
 
+                if st.session_state.game_over:
+                    st.rerun()
+
     else:
         st.warning(
             "Auto mode needs `streamlit-autorefresh`. Install it with: "
@@ -470,6 +643,11 @@ if caller_mode != "Manual Button":
 # -----------------------------
 st.divider()
 st.subheader("🟦 Bingo Board")
+
+# Fire balloons once after rerun
+if st.session_state.show_win_balloons:
+    st.balloons()
+    st.session_state.show_win_balloons = False
 
 # Current called word directly above board
 if st.session_state.current_called_word:
@@ -495,7 +673,18 @@ else:
     )
 
 
-if st.session_state.card is None:
+if st.session_state.game_over:
+    st.markdown(
+        """
+        <div class="game-over-note">
+            Game complete. Generate a new card or reset called words to play again.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+if st.session_state.board is None:
     st.markdown(
         """
         <div class="empty-card">
@@ -506,6 +695,18 @@ if st.session_state.card is None:
     )
 
 else:
+    st.markdown(
+        """
+        <div class="tiny-center-note">
+            Overlay key: ⬜ waiting · 🎯 called · ✅ marked · ⭐ free
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # This colors the actual button faces.
+    inject_board_button_colors()
+
     header_cols = st.columns(BOARD_SIZE)
 
     for letter, col in zip("BINGO", header_cols):
@@ -519,25 +720,40 @@ else:
         cols = st.columns(BOARD_SIZE)
 
         for col in range(BOARD_SIZE):
-            word = st.session_state.card[row][col]
-            is_marked = st.session_state.marked[row][col]
-            is_called = word in st.session_state.called_words
+            cell = st.session_state.board[row][col]
 
-            if is_marked:
-                label = f"✅ {word}"
-            elif is_called:
-                label = f"🎯 {word}"
-            else:
-                label = word
+            word = cell["word"]
+            is_marked_cell = cell["marked"]
+            is_called_cell = cell["called"]
+            is_free_cell = cell["free"]
 
+            label = build_tile_label(word, is_marked_cell, is_called_cell)
             key = f"cell_{row}_{col}"
 
             with cols[col]:
-                if st.button(label, key=key, use_container_width=True):
-                    if word != FREE_SPACE:
-                        st.session_state.marked[row][col] = not is_marked
+                clicked = st.button(
+                    label,
+                    key=key,
+                    use_container_width=True,
+                    disabled=st.session_state.game_over
+                )
 
-    if check_win(st.session_state.marked, st.session_state.game_mode):
+                if clicked and not is_free_cell and not st.session_state.game_over:
+                    st.session_state.board[row][col]["marked"] = not is_marked_cell
+
+                    if check_win(st.session_state.board, st.session_state.game_mode):
+                        st.session_state.game_over = True
+                        st.session_state.show_win_balloons = True
+                        st.rerun()
+
+    has_won = st.session_state.game_over or check_win(
+        st.session_state.board,
+        st.session_state.game_mode
+    )
+
+    if has_won:
+        st.session_state.game_over = True
+
         st.markdown(
             f"""
             <div class='bingo-status'>
@@ -546,15 +762,8 @@ else:
             """,
             unsafe_allow_html=True
         )
-        st.balloons()
     else:
-        marked_count = sum(
-            1
-            for row in st.session_state.marked
-            for value in row
-            if value
-        )
-
+        marked_count = get_marked_count(st.session_state.board)
         st.caption(f"Marked squares: {marked_count}/25")
 
 
