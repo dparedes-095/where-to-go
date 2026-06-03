@@ -514,11 +514,18 @@ if not timeline_df.empty:
     )
 
     fig_timeline.update_layout(
-        height=600,
-        xaxis_title="Date / Time",
-        yaxis_title="",
-        legend_title="Segment",
-        margin=dict(l=20, r=20, t=60, b=40),
+    height=650,
+    xaxis_title="Date / Time",
+    yaxis_title="",
+    legend_title="",
+    legend=dict(
+        orientation="h",
+        yanchor="top",
+        y=-0.18,
+        xanchor="center",
+        x=0.5,
+        ),
+        margin=dict(l=20, r=20, t=60, b=120),
     )
 
     st.plotly_chart(fig_timeline, use_container_width=True)
