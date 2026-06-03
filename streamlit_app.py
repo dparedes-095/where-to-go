@@ -159,6 +159,32 @@ def read_data():
     return pd.read_csv(StringIO(content))
 
 
+def make_short_option_label(airline, travel_tier):
+    airline = str(airline).strip()
+    travel_tier = str(travel_tier).strip().replace('"', "")
+
+    # Remove airport/city note in parentheses
+    airline_clean = re.sub(r"\s*\(.*?\)", "", airline).strip()
+
+    airline_map = {
+        "Japan Airlines": "JAL",
+        "Zipair": "ZIPAIR",
+        "ZIPAIR": "ZIPAIR",
+        "Delta": "Delta",
+    }
+
+    tier_map = {
+        "Premium Economy": "Prem Econ",
+        "Business Class": "Business",
+        "Business": "Business",
+    }
+
+    short_airline = airline_map.get(airline_clean, airline_clean)
+    short_tier = tier_map.get(travel_tier, travel_tier)
+
+    return f"{short_airline} — {short_tier}"
+
+
 def normalize_columns(df):
     """
     Handles:
@@ -176,7 +202,6 @@ def normalize_columns(df):
         "Incoing Arival Date": "Incoming Arrival Date",
 
         # New incoming connector fields
-        "Connecting Incoming Arrival Date": "Connecting Incoming Arrival Date",
         "Connecting Incoming Arival Date": "Connecting Incoming Arrival Date",
         "Connecting Incoming Arrival Date.1": "Connecting Incoming Arrival Date",
 
@@ -267,6 +292,10 @@ for col in required_cols:
         st.stop()
 
 df["Option"] = df["Airline"].astype(str) + " — " + df["Travel Tier"].astype(str)
+df["Short Option"] = df.apply(
+    lambda row: make_short_option_label(row["Airline"], row["Travel Tier"]),
+    axis=1
+)
 
 # --------------------------------------------------
 # Trip Option Cards
@@ -388,7 +417,8 @@ def build_timeline_rows(source_df):
     rows = []
 
     for _, row in source_df.iterrows():
-        option = row["Option"]
+        option = row["Short Option"]
+        full_option = row["Option"]
 
         timeline_parts = [
             (
@@ -441,6 +471,7 @@ def build_timeline_rows(source_df):
                 rows.append(
                     {
                         "Option": option,
+                        "Full Option": full_option,
                         "Segment": segment,
                         "Start": start,
                         "End": end,
@@ -467,17 +498,27 @@ if not timeline_df.empty:
         x_end="End",
         y="Option",
         color="Segment",
-        hover_data=["Segment", "Start", "End"],
+        hover_data={
+            "Full Option": True,
+            "Segment": True,
+            "Start": True,
+            "End": True,
+            "Option": False,
+        },
         title="Trip Timeline"
     )
 
-    fig_timeline.update_yaxes(autorange="reversed")
+    fig_timeline.update_yaxes(
+        autorange="reversed",
+        title="",
+    )
 
     fig_timeline.update_layout(
         height=600,
         xaxis_title="Date / Time",
-        yaxis_title="Trip Option",
-        legend_title="Segment"
+        yaxis_title="",
+        legend_title="Segment",
+        margin=dict(l=20, r=20, t=60, b=40),
     )
 
     st.plotly_chart(fig_timeline, use_container_width=True)
