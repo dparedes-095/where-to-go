@@ -1,780 +1,683 @@
-import random
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
 import streamlit as st
+import pandas as pd
+import plotly.express as px
+from io import StringIO
+from datetime import datetime, timedelta
+import re
 
-try:
-    from streamlit_autorefresh import st_autorefresh
-    AUTO_REFRESH_AVAILABLE = True
-except ImportError:
-    AUTO_REFRESH_AVAILABLE = False
-
-
+# --------------------------------------------------
+# Page Config
+# --------------------------------------------------
 st.set_page_config(
-    page_title="Vibe Bingo",
-    page_icon="🎲",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    page_title="Tokyo Trip Comparator",
+    page_icon="✈️",
+    layout="wide"
 )
 
-# -----------------------------
-# Preset word sets
-# -----------------------------
-PRESETS = {
-    "Country Bingo": [
-        "Germany",
-        "France",
-        "Italy",
-        "Netherlands",
-        "England",
-        "Ireland",
-        "Scotland",
-        "Japan",
-        "South Korea",
-        "Spain",
-        "Austria",
-        "Chile",
-        "Greece",
-        "Portugal",
-        "Denmark",
-        "Australia",
-        "New Zealand",
-        "Switzerland",
-        "Belgium",
-        "Thailand",
-        "Canada",
-        "Iceland",
-        "Guatemala",
-        "Peru",
-    ],
-    "Theme Park Day": [
-        "Long Line", "Mobile Order", "Rain Delay", "Rope Drop", "Snack Break",
-        "Ride Photo", "Parade", "Gift Shop", "Early Entry", "Lightning Lane",
-        "Refill Cup", "Lost Group", "Low Wait", "Character Meet", "Fireworks",
-        "Crowded Path", "Random Show", "Ride Breakdown", "Cold Drink", "Shade Spot",
-        "Walk-On Ride", "Souvenir", "Phone Battery Low", "Good Seat", "Unexpected Win",
-        "Queue Music", "Park Map", "Hot Weather", "Indoor Ride", "Final Ride"
-    ],
-    "Cozy Night": [
-        "Blanket", "Tea", "Candle", "Movie", "Rain Sounds",
-        "Book", "Sweatpants", "Soup", "Lo-Fi", "Soft Socks",
-        "Pillow", "Dim Lights", "Snack Bowl", "Pet Nap", "Window View",
-        "Warm Drink", "Comfort Show", "No Plans", "Phone Away", "Puzzle",
-        "Fresh Sheets", "Calm Music", "Early Bed", "Hoodie", "Stretch",
-        "Journal", "Lamp Light", "Cozy Chair", "Quiet Room", "Slow Morning"
-    ],
-}
+# --------------------------------------------------
+# Password Gate
+# --------------------------------------------------
+def check_password():
+    if "password_correct" not in st.session_state:
+        st.session_state.password_correct = False
 
-BOARD_SIZE = 5
-FREE_SPACE = "FREE"
+    if st.session_state.password_correct:
+        return True
 
-GAME_MODES = [
-    "4 Corners",
-    "1 Row, Column, or Diagonal",
-    "Blackout - All But 1",
-]
+    st.title("🔐 Tokyo Trip Comparator")
+    st.caption("Enter the password to access the app.")
 
+    password = st.text_input("Password", type="password")
 
-# -----------------------------
-# Helpers
-# -----------------------------
-def parse_words(word_text):
-    return [
-        word.strip()
-        for word in word_text.splitlines()
-        if word.strip()
-    ]
+    if st.button("Enter"):
+        try:
+            correct_password = st.secrets["APP_PASSWORD"]
+        except KeyError:
+            st.error("APP_PASSWORD is missing from Streamlit Cloud Secrets.")
+            return False
 
-
-def generate_board_matrix(words):
-    needed_words = BOARD_SIZE * BOARD_SIZE - 1
-    selected = random.sample(words, needed_words)
-
-    board = []
-    word_index = 0
-
-    for row in range(BOARD_SIZE):
-        current_row = []
-
-        for col in range(BOARD_SIZE):
-            if row == 2 and col == 2:
-                current_row.append({
-                    "word": FREE_SPACE,
-                    "marked": True,
-                    "called": True,
-                    "free": True,
-                })
-            else:
-                current_row.append({
-                    "word": selected[word_index],
-                    "marked": False,
-                    "called": False,
-                    "free": False,
-                })
-                word_index += 1
-
-        board.append(current_row)
-
-    return board
-
-
-def is_marked(board, row, col):
-    return board[row][col]["marked"]
-
-
-def check_win(board, game_mode):
-    if board is None:
-        return False
-
-    if game_mode == "4 Corners":
-        return (
-            is_marked(board, 0, 0)
-            and is_marked(board, 0, BOARD_SIZE - 1)
-            and is_marked(board, BOARD_SIZE - 1, 0)
-            and is_marked(board, BOARD_SIZE - 1, BOARD_SIZE - 1)
-        )
-
-    if game_mode == "1 Row, Column, or Diagonal":
-        # Rows
-        for row in range(BOARD_SIZE):
-            if all(is_marked(board, row, col) for col in range(BOARD_SIZE)):
-                return True
-
-        # Columns
-        for col in range(BOARD_SIZE):
-            if all(is_marked(board, row, col) for row in range(BOARD_SIZE)):
-                return True
-
-        # Diagonal: top-left to bottom-right
-        if all(is_marked(board, i, i) for i in range(BOARD_SIZE)):
-            return True
-
-        # Diagonal: top-right to bottom-left
-        if all(is_marked(board, i, BOARD_SIZE - 1 - i) for i in range(BOARD_SIZE)):
-            return True
-
-        return False
-
-    if game_mode == "Blackout - All But 1":
-        marked_count = sum(
-            1
-            for row in range(BOARD_SIZE)
-            for col in range(BOARD_SIZE)
-            if board[row][col]["marked"]
-        )
-
-        # 25 total spaces, FREE space already counts as marked.
-        # This means 24 out of 25 marked.
-        return marked_count >= (BOARD_SIZE * BOARD_SIZE - 1)
+        if password == correct_password:
+            st.session_state.password_correct = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
 
     return False
 
 
-def reset_card(words, preset_name):
-    st.session_state.board = generate_board_matrix(words)
-    st.session_state.active_card_preset = preset_name
-    st.session_state.card_word_snapshot = words.copy()
-    st.session_state.game_over = False
-    st.session_state.show_win_balloons = False
+if not check_password():
+    st.stop()
 
+# --------------------------------------------------
+# App Header
+# --------------------------------------------------
+st.title("✈️ Tokyo Trip Comparator")
+st.caption("Compare flight options by cost, timing, hotel impact, and split payments.")
 
-def reset_called_words():
-    st.session_state.called_words = []
-    st.session_state.current_called_word = None
-    st.session_state.last_called_at = None
-    st.session_state.game_over = False
-    st.session_state.show_win_balloons = False
+# --------------------------------------------------
+# Sidebar Controls
+# --------------------------------------------------
+DEFAULT_YEAR = st.sidebar.number_input(
+    "Trip year",
+    min_value=2026,
+    max_value=2035,
+    value=2027,
+    step=1
+)
 
-    if st.session_state.board is not None:
-        for row in range(BOARD_SIZE):
-            for col in range(BOARD_SIZE):
-                cell = st.session_state.board[row][col]
+st.sidebar.markdown("---")
+st.sidebar.caption("Paste tab-separated data or upload a CSV/TSV.")
 
-                if cell["free"]:
-                    cell["called"] = True
-                    cell["marked"] = True
-                else:
-                    cell["called"] = False
-                    cell["marked"] = False
+uploaded_file = st.sidebar.file_uploader(
+    "Upload CSV or TSV",
+    type=["csv", "tsv", "txt"]
+)
 
+# --------------------------------------------------
+# Default Data
+# --------------------------------------------------
+sample_data = """Airline\tTravel Tier\tConnecting Outgoing Departure Date\tConnecting Outgoing Arrival Date\tOutgoing Departure Date\tOutgoing Arrival Date\tIncoming Departure Date\tIncoming Arrival Date\tConnecting Incoming Departure Date\tConnecting Incoming  Arrival Date\tHotel Check In\tHotel Check Out\tConnecting Outgoing Hotel Check In\tConnecting Outgoing Hotel Check Out\tConnecting Incoing Hotel Check In\tConnecting Incoing Hotel Check Out\tConnecting Hotel Price Max\tHypothetical Hotel Price Max\tConnecting Hotel Check In\tConnecting Hotel Check Out\tDirect Flight Price\tConnecting Flight Price\tFlight Price\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey\t$ of Highest Savings\tPercent of Highest Savings\tHotel + Flight\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey
+Japan Airlines (Chicago)\tPremium Economy\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$4,193.06\t\t$4,193.06\t$2,096.53\t$2,935.14\t$1,257.92\t$6,775.94\t61.77%\t$8,782.66\t$4,391.33\t$6,147.86\t$2,634.80
+Delta (Minniapolis)\tPremium Economy\t2/6 6:40\t2/6 9:16\t2/6 10:45\t2/7 14:35\t2/17 16:45\t2/17 14:55\t2/17 16:55\t2/17 14:26\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$4,483.85\t\t$4,483.85\t$2,241.93\t$3,138.70\t$1,345.16\t$6,485.15\t59.12%\t$9,073.45\t$4,536.73\t$6,351.42\t$2,722.04
+Zipair (San Fransisco)\t"Business" Class\t2/5 6:00\t2/5 16:01\t2/6 15:45\t2/7 19:55\t2/17 21:25\t2/17 19:55\t2/18 6:00\t2/18 12:36\t2/7\t2/17\t2/5\t2/6\t2/17\t2/18\t$410.00\t$4,999.60\t2/6\t2/18\t$6,786.76\t$1,076.48\t$7,863.24\t$3,931.62\t$5,504.27\t$2,358.97\t$3,105.76\t28.31%\t$11,786.36\t$5,893.18\t$8,250.45\t$3,535.91
+Japan Airlines (Chicago)\tBusiness Class\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$10,969.00\t\t$10,969.00\t$5,484.50\t$7,678.30\t$3,290.70\t$0.00\t\t$15,558.60\t$7,779.30\t$10,891.02\t$4,667.58
+"""
 
-def call_random_word(words):
-    available_words = [
-        word
-        for word in words
-        if word not in st.session_state.called_words
-    ]
+with st.expander("Paste / edit trip data", expanded=False):
+    pasted_data = st.text_area(
+        "Trip data",
+        value=sample_data,
+        height=260
+    )
 
-    if not available_words:
+# --------------------------------------------------
+# Helper Functions
+# --------------------------------------------------
+def clean_money(value):
+    if pd.isna(value) or str(value).strip() == "":
         return None
 
-    picked_word = random.choice(available_words)
+    cleaned = re.sub(r"[^0-9.\-]", "", str(value))
 
-    st.session_state.called_words.append(picked_word)
-    st.session_state.current_called_word = picked_word
-    st.session_state.last_called_at = datetime.now(
-        ZoneInfo("America/New_York")
-    ).strftime("%I:%M:%S %p EST")
+    if cleaned == "":
+        return None
 
-    # Update board matrix.
-    # Called words also become marked so rules can end the game.
-    if st.session_state.board is not None:
-        for row in range(BOARD_SIZE):
-            for col in range(BOARD_SIZE):
-                cell = st.session_state.board[row][col]
-
-                if cell["word"] == picked_word:
-                    cell["called"] = True
-                    cell["marked"] = True
-
-    if check_win(st.session_state.board, st.session_state.game_mode):
-        st.session_state.game_over = True
-        st.session_state.show_win_balloons = True
-
-    return picked_word
+    return float(cleaned)
 
 
-def build_tile_label(word, is_marked, is_called):
-    if word == FREE_SPACE:
-        return f"⭐\n{word}"
+def clean_percent(value):
+    if pd.isna(value) or str(value).strip() == "":
+        return None
 
-    if is_marked:
-        return f"✅\n{word}"
+    cleaned = str(value).replace("%", "").strip()
 
-    if is_called:
-        return f"🎯\n{word}"
+    if cleaned == "":
+        return None
 
-    return f"⬜\n{word}"
-
-
-def inject_board_button_colors():
-    """
-    Uses Streamlit widget keys to target the actual st.button face.
-    Marked and FREE cells turn green.
-    Called but unmarked cells turn amber.
-    """
-    if st.session_state.board is None:
-        return
-
-    css_lines = ["<style>"]
-
-    for row in range(BOARD_SIZE):
-        for col in range(BOARD_SIZE):
-            cell = st.session_state.board[row][col]
-            word = cell["word"]
-            is_marked_cell = cell["marked"]
-            is_called_cell = cell["called"]
-            key_class = f".st-key-cell_{row}_{col}"
-
-            if word == FREE_SPACE or is_marked_cell:
-                css_lines.append(
-                    f"""
-                    {key_class} button {{
-                        background: rgba(0, 180, 95, 0.38) !important;
-                        border: 1px solid rgba(0, 230, 130, 0.95) !important;
-                        color: white !important;
-                        box-shadow: 0 0 18px rgba(0, 220, 120, 0.30) !important;
-                    }}
-
-                    {key_class} button p {{
-                        color: white !important;
-                    }}
-                    """
-                )
-
-            elif is_called_cell:
-                css_lines.append(
-                    f"""
-                    {key_class} button {{
-                        background: rgba(255, 190, 0, 0.24) !important;
-                        border: 1px solid rgba(255, 220, 90, 0.85) !important;
-                        box-shadow: 0 0 14px rgba(255, 200, 0, 0.20) !important;
-                    }}
-                    """
-                )
-
-    css_lines.append("</style>")
-    st.markdown("\n".join(css_lines), unsafe_allow_html=True)
+    return float(cleaned)
 
 
-def get_marked_count(board):
-    if board is None:
-        return 0
+def parse_trip_datetime(value, year):
+    if pd.isna(value) or str(value).strip() == "":
+        return pd.NaT
 
-    return sum(
-        1
-        for row in range(BOARD_SIZE)
-        for col in range(BOARD_SIZE)
-        if board[row][col]["marked"]
-    )
+    text = str(value).strip()
 
+    try:
+        if ":" in text:
+            return datetime.strptime(f"{year}/{text}", "%Y/%m/%d %H:%M")
 
-# -----------------------------
-# Session State Defaults
-# -----------------------------
-if "active_word_preset" not in st.session_state:
-    first_preset = list(PRESETS.keys())[0]
-    st.session_state.active_word_preset = first_preset
-    st.session_state.word_text = "\n".join(PRESETS[first_preset])
+        return datetime.strptime(f"{year}/{text}", "%Y/%m/%d")
 
-if "board" not in st.session_state:
-    st.session_state.board = None
-
-if "called_words" not in st.session_state:
-    st.session_state.called_words = []
-
-if "current_called_word" not in st.session_state:
-    st.session_state.current_called_word = None
-
-if "last_called_at" not in st.session_state:
-    st.session_state.last_called_at = None
-
-if "auto_call_tick" not in st.session_state:
-    st.session_state.auto_call_tick = 0
-
-if "game_mode" not in st.session_state:
-    st.session_state.game_mode = "1 Row, Column, or Diagonal"
-
-if "game_over" not in st.session_state:
-    st.session_state.game_over = False
-
-if "show_win_balloons" not in st.session_state:
-    st.session_state.show_win_balloons = False
+    except ValueError:
+        return pd.NaT
 
 
-# -----------------------------
-# Base Styling
-# -----------------------------
-st.markdown(
-    """
-    <style>
-    .main-title {
-        text-align: center;
-        font-size: 2.3rem;
-        font-weight: 900;
-        margin-bottom: 0.1rem;
-    }
+def fmt_money(value):
+    if pd.isna(value) or value is None:
+        return "—"
 
-    .subtitle {
-        text-align: center;
-        opacity: 0.75;
-        margin-bottom: 1rem;
-    }
-
-    .caller-card {
-        text-align: center;
-        font-size: 2.3rem;
-        font-weight: 900;
-        padding: 1.4rem;
-        border-radius: 24px;
-        background: rgba(255,255,255,0.09);
-        border: 1px solid rgba(255,255,255,0.22);
-        margin-top: 0.5rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 8px 22px rgba(0,0,0,0.16);
-    }
-
-    .caller-empty {
-        text-align: center;
-        font-size: 1.1rem;
-        font-weight: 700;
-        padding: 1.2rem;
-        border-radius: 18px;
-        background: rgba(255,255,255,0.05);
-        border: 1px dashed rgba(255,255,255,0.22);
-        margin-top: 0.5rem;
-        margin-bottom: 1rem;
-    }
-
-    .bingo-header {
-        text-align: center;
-        font-weight: 900;
-        font-size: 1.45rem;
-        padding: 0.5rem;
-        border-radius: 14px;
-        background: rgba(255,255,255,0.10);
-        border: 1px solid rgba(255,255,255,0.18);
-        margin-bottom: 0.5rem;
-    }
-
-    /*
-      Base button style.
-      State-specific colors are injected later using each button key.
-    */
-    div[data-testid="stButton"] > button {
-        min-height: 92px;
-        white-space: pre-line;
-        border-radius: 18px;
-        font-weight: 850;
-        line-height: 1.12;
-        border: 1px solid rgba(255,255,255,0.22);
-        background: rgba(255,255,255,0.065);
-        box-shadow: 0 5px 14px rgba(0,0,0,0.12);
-        transition: transform 0.08s ease, border 0.08s ease, background 0.08s ease, box-shadow 0.08s ease;
-    }
-
-    div[data-testid="stButton"] > button:hover {
-        transform: translateY(-1px) scale(1.015);
-        border: 1px solid rgba(255,255,255,0.45);
-        background: rgba(255,255,255,0.11);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.16);
-    }
-
-    div[data-testid="stButton"] > button:active {
-        transform: scale(0.98);
-    }
-
-    .bingo-status {
-        text-align: center;
-        font-size: 1.3rem;
-        font-weight: 900;
-        padding: 1rem;
-        border-radius: 18px;
-        margin-top: 1rem;
-        background: rgba(0, 200, 120, 0.15);
-        border: 1px solid rgba(0, 200, 120, 0.35);
-    }
-
-    .game-over-note {
-        text-align: center;
-        font-size: 1rem;
-        font-weight: 700;
-        padding: 0.8rem;
-        border-radius: 16px;
-        background: rgba(0, 200, 120, 0.10);
-        border: 1px solid rgba(0, 200, 120, 0.25);
-        margin-bottom: 1rem;
-    }
-
-    .empty-card {
-        text-align: center;
-        padding: 2rem;
-        border-radius: 18px;
-        background: rgba(255,255,255,0.06);
-        border: 1px dashed rgba(255,255,255,0.25);
-    }
-
-    .tiny-center-note {
-        text-align: center;
-        opacity: 0.75;
-        font-size: 0.9rem;
-        margin-top: -0.3rem;
-        margin-bottom: 0.7rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+    return f"${value:,.2f}"
 
 
-# -----------------------------
-# App Header
-# -----------------------------
-st.markdown("<div class='main-title'>🎲 Vibe Bingo</div>", unsafe_allow_html=True)
-st.markdown(
-    "<div class='subtitle'>Generate a word card, call random words, and mark your squares.</div>",
-    unsafe_allow_html=True
-)
+def fmt_pct(value):
+    if pd.isna(value) or value is None:
+        return "—"
+
+    return f"{value:.2f}%"
 
 
-# -----------------------------
-# Sidebar: Word Pool + Card Setup
-# -----------------------------
-with st.sidebar:
-    st.header("Settings")
-
-    preset = st.selectbox(
-        "Choose a Bingo Card preset",
-        list(PRESETS.keys())
-    )
-
-    if st.session_state.active_word_preset != preset:
-        st.session_state.active_word_preset = preset
-        st.session_state.word_text = "\n".join(PRESETS[preset])
-        st.session_state.board = None
-        reset_called_words()
-
-    st.divider()
-
-    st.subheader("📝 Word Pool")
-    st.write("Words the card and caller randomly pick from.")
-
-    word_text = st.text_area(
-        "One word or phrase per line",
-        key="word_text",
-        height=260,
-        help="A 5x5 bingo card with a FREE space needs at least 24 words."
-    )
-
-    custom_words = parse_words(word_text)
-
-    if len(custom_words) >= 24:
-        st.success(f"{len(custom_words)} words available.")
+def read_data():
+    if uploaded_file is not None:
+        content = uploaded_file.read().decode("utf-8")
     else:
-        st.warning(f"{len(custom_words)} words available. Add {24 - len(custom_words)} more.")
+        content = pasted_data
 
-    with st.expander("Preview word pool"):
-        if custom_words:
-            st.write(", ".join(custom_words))
-        else:
-            st.write("No words yet.")
+    if "\t" in content:
+        return pd.read_csv(StringIO(content), sep="\t")
 
-    st.divider()
-
-    st.subheader("🧩 Bingo Card Setup")
-
-    if st.button("🎯 Generate New Card", use_container_width=True):
-        if len(custom_words) < 24:
-            st.warning("You need at least 24 words to generate a bingo card.")
-        else:
-            reset_card(custom_words, preset)
-            reset_called_words()
-
-    if st.button("🧼 Clear Marks", use_container_width=True):
-        if st.session_state.board is not None:
-            for row in range(BOARD_SIZE):
-                for col in range(BOARD_SIZE):
-                    cell = st.session_state.board[row][col]
-                    cell["marked"] = cell["free"]
-
-        st.session_state.game_over = False
-        st.session_state.show_win_balloons = False
-
-    if st.button("🔄 Reset Called Words", use_container_width=True):
-        reset_called_words()
+    return pd.read_csv(StringIO(content))
 
 
-# Auto-create first board once if possible
-if st.session_state.board is None and len(custom_words) >= 24:
-    reset_card(custom_words, st.session_state.active_word_preset)
+def normalize_columns(df):
+    """
+    Handles:
+    - typo cleanup
+    - duplicate pandas columns like Per Person and Per Person.1
+    - double spaces in headers
+    """
+    df.columns = [str(c).strip().replace("  ", " ") for c in df.columns]
+
+    rename_map = {
+        # Common typo fixes
+        "Connecting Outgoing Arival Date": "Connecting Outgoing Arrival Date",
+        "Outgoing Arival Date": "Outgoing Arrival Date",
+        "Incoing Departure Date": "Incoming Departure Date",
+        "Incoing Arival Date": "Incoming Arrival Date",
+
+        # New incoming connector fields
+        "Connecting Incoming Arrival Date": "Connecting Incoming Arrival Date",
+        "Connecting Incoming Arival Date": "Connecting Incoming Arrival Date",
+        "Connecting Incoming Arrival Date.1": "Connecting Incoming Arrival Date",
+
+        # Your current typo spelling
+        "Connecting Incoing Hotel Check In": "Connecting Incoming Hotel Check In",
+        "Connecting Incoing Hotel Check Out": "Connecting Incoming Hotel Check Out",
+
+        # Old naming support
+        "Connecting Return Departure Date": "Connecting Incoming Departure Date",
+        "Connecting Return Arrival Date": "Connecting Incoming Arrival Date",
+        "Connecting Return Arival Date": "Connecting Incoming Arrival Date",
+
+        # Duplicate cost columns from pandas
+        "Per Person": "Per Person Flight",
+        "Per Person.1": "Per Person Total",
+        "70/30 Split Daniel": "70/30 Split Daniel Flight",
+        "70/30 Split Daniel.1": "70/30 Split Daniel Total",
+        "70/30 Split Kelsey": "70/30 Split Kelsey Flight",
+        "70/30 Split Kelsey.1": "70/30 Split Kelsey Total",
+    }
+
+    df = df.rename(columns=rename_map)
+    return df
 
 
-# -----------------------------
-# Game Options
-# -----------------------------
-st.subheader("🎮 Game Options")
+# --------------------------------------------------
+# Load + Clean Data
+# --------------------------------------------------
+try:
+    df = read_data()
+except Exception as e:
+    st.error(f"Could not read data: {e}")
+    st.stop()
 
-st.session_state.game_mode = st.radio(
-    "Win condition",
-    GAME_MODES,
-    index=GAME_MODES.index(st.session_state.game_mode),
-    horizontal=True,
-    disabled=st.session_state.game_over
+df = normalize_columns(df)
+
+money_cols = [
+    "Connecting Hotel Price Max",
+    "Hypothetical Hotel Price Max",
+    "Direct Flight Price",
+    "Connecting Flight Price",
+    "Flight Price",
+    "Per Person Flight",
+    "70/30 Split Daniel Flight",
+    "70/30 Split Kelsey Flight",
+    "$ of Highest Savings",
+    "Hotel + Flight",
+    "Per Person Total",
+    "70/30 Split Daniel Total",
+    "70/30 Split Kelsey Total",
+]
+
+for col in money_cols:
+    if col in df.columns:
+        df[col] = df[col].apply(clean_money)
+
+if "Percent of Highest Savings" in df.columns:
+    df["Percent of Highest Savings"] = df["Percent of Highest Savings"].apply(clean_percent)
+
+date_cols = [
+    "Connecting Outgoing Departure Date",
+    "Connecting Outgoing Arrival Date",
+    "Outgoing Departure Date",
+    "Outgoing Arrival Date",
+    "Incoming Departure Date",
+    "Incoming Arrival Date",
+    "Connecting Incoming Departure Date",
+    "Connecting Incoming Arrival Date",
+    "Hotel Check In",
+    "Hotel Check Out",
+    "Connecting Outgoing Hotel Check In",
+    "Connecting Outgoing Hotel Check Out",
+    "Connecting Incoming Hotel Check In",
+    "Connecting Incoming Hotel Check Out",
+    "Connecting Hotel Check In",
+    "Connecting Hotel Check Out",
+]
+
+for col in date_cols:
+    if col in df.columns:
+        df[col] = df[col].apply(lambda x: parse_trip_datetime(x, DEFAULT_YEAR))
+
+required_cols = ["Airline", "Travel Tier"]
+
+for col in required_cols:
+    if col not in df.columns:
+        st.error(f"Missing required column: {col}")
+        st.stop()
+
+df["Option"] = df["Airline"].astype(str) + " — " + df["Travel Tier"].astype(str)
+
+# --------------------------------------------------
+# Trip Option Cards
+# --------------------------------------------------
+st.markdown("## 🧾 Trip Options")
+
+sort_options = [
+    "Hotel + Flight",
+    "Flight Price",
+    "Per Person Total",
+    "$ of Highest Savings",
+    "Percent of Highest Savings",
+]
+
+available_sort_options = [c for c in sort_options if c in df.columns]
+
+sort_choice = st.selectbox(
+    "Sort options by",
+    available_sort_options,
+    index=0 if available_sort_options else None
 )
 
-if st.session_state.game_mode == "4 Corners":
-    st.caption("Win by marking all 4 corner squares.")
-
-elif st.session_state.game_mode == "1 Row, Column, or Diagonal":
-    st.caption("Classic bingo: win with any full row, column, or diagonal.")
-
-elif st.session_state.game_mode == "Blackout - All But 1":
-    st.caption("Win by marking 24 out of 25 squares. The FREE space counts as marked.")
-
-st.divider()
-
-
-# -----------------------------
-# Word Caller
-# -----------------------------
-st.subheader("🎤 Word Caller")
-
-caller_mode = st.radio(
-    "Caller mode",
-    ["Manual Button", "Auto Every 20 Seconds", "Auto Every 30 Seconds"],
-    horizontal=True,
-    disabled=st.session_state.game_over
-)
-
-caller_col_1, caller_col_2 = st.columns(2)
-
-with caller_col_1:
-    if st.session_state.game_over:
-        st.button("🎲 Call Random Word", use_container_width=True, disabled=True)
-    else:
-        if st.button("🎲 Call Random Word", use_container_width=True):
-            if len(custom_words) == 0:
-                st.warning("Add words first.")
-            else:
-                picked = call_random_word(custom_words)
-
-                if picked is None:
-                    st.info("All words have already been called.")
-
-                if st.session_state.game_over:
-                    st.rerun()
-
-with caller_col_2:
-    st.caption(f"Called words: {len(st.session_state.called_words)} / {len(custom_words)}")
-
-
-# Auto caller
-if caller_mode != "Manual Button" and not st.session_state.game_over:
-    if AUTO_REFRESH_AVAILABLE:
-        seconds = 20 if caller_mode == "Auto Every 20 Seconds" else 30
-
-        tick = st_autorefresh(
-            interval=seconds * 1000,
-            key="auto_word_caller_refresh"
-        )
-
-        if tick != st.session_state.auto_call_tick:
-            st.session_state.auto_call_tick = tick
-
-            if len(custom_words) > 0:
-                picked = call_random_word(custom_words)
-
-                if picked is None:
-                    st.info("All words have already been called.")
-
-                if st.session_state.game_over:
-                    st.rerun()
-
-    else:
-        st.warning(
-            "Auto mode needs `streamlit-autorefresh`. Install it with: "
-            "`pip install streamlit-autorefresh`"
-        )
-
-
-# -----------------------------
-# Bingo Board
-# -----------------------------
-st.divider()
-st.subheader("🟦 Bingo Board")
-
-# Fire balloons once after rerun
-if st.session_state.show_win_balloons:
-    st.balloons()
-    st.session_state.show_win_balloons = False
-
-# Current called word directly above board
-if st.session_state.current_called_word:
-    st.markdown(
-        f"""
-        <div class="caller-card">
-            🎤 {st.session_state.current_called_word}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    if st.session_state.last_called_at:
-        st.caption(f"Last called at {st.session_state.last_called_at}")
+if sort_choice:
+    ascending = sort_choice not in ["$ of Highest Savings", "Percent of Highest Savings"]
+    df_display = df.sort_values(sort_choice, ascending=ascending, na_position="last")
 else:
-    st.markdown(
-        """
-        <div class="caller-empty">
-            Press <b>Call Random Word</b> to start.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    df_display = df.copy()
 
+card_cols = st.columns(2)
 
-if st.session_state.game_over:
-    st.markdown(
-        """
-        <div class="game-over-note">
-            Game complete. Generate a new card or reset called words to play again.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-if st.session_state.board is None:
-    st.markdown(
-        """
-        <div class="empty-card">
-            Add at least 24 words from the sidebar, then click <b>Generate New Card</b>.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-else:
-    st.markdown(
-        """
-        <div class="tiny-center-note">
-            Overlay key: ⬜ waiting · 🎯 called · ✅ marked · ⭐ free
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # This colors the actual button faces.
-    inject_board_button_colors()
-
-    header_cols = st.columns(BOARD_SIZE)
-
-    for letter, col in zip("BINGO", header_cols):
-        with col:
-            st.markdown(
-                f"<div class='bingo-header'>{letter}</div>",
-                unsafe_allow_html=True
-            )
-
-    for row in range(BOARD_SIZE):
-        cols = st.columns(BOARD_SIZE)
-
-        for col in range(BOARD_SIZE):
-            cell = st.session_state.board[row][col]
-
-            word = cell["word"]
-            is_marked_cell = cell["marked"]
-            is_called_cell = cell["called"]
-            is_free_cell = cell["free"]
-
-            label = build_tile_label(word, is_marked_cell, is_called_cell)
-            key = f"cell_{row}_{col}"
-
-            with cols[col]:
-                clicked = st.button(
-                    label,
-                    key=key,
-                    use_container_width=True,
-                    disabled=st.session_state.game_over
-                )
-
-                if clicked and not is_free_cell and not st.session_state.game_over:
-                    st.session_state.board[row][col]["marked"] = not is_marked_cell
-
-                    if check_win(st.session_state.board, st.session_state.game_mode):
-                        st.session_state.game_over = True
-                        st.session_state.show_win_balloons = True
-                        st.rerun()
-
-    has_won = st.session_state.game_over or check_win(
-        st.session_state.board,
-        st.session_state.game_mode
-    )
-
-    if has_won:
-        st.session_state.game_over = True
+for i, (_, row) in enumerate(df_display.iterrows()):
+    with card_cols[i % 2]:
+        airline = row.get("Airline", "Unknown Airline")
+        tier = row.get("Travel Tier", "Unknown Tier")
 
         st.markdown(
             f"""
-            <div class='bingo-status'>
-                🎉 WIN! You completed: {st.session_state.game_mode}
+            <div style="
+                border: 1px solid rgba(120,120,120,0.35);
+                border-radius: 16px;
+                padding: 18px;
+                margin-bottom: 16px;
+                background: rgba(250,250,250,0.04);
+            ">
+                <h3 style="margin-bottom: 4px;">{airline}</h3>
+                <p style="margin-top: 0; opacity: .75;">{tier}</p>
+                <hr>
+                <b>Flight Price:</b> {fmt_money(row.get("Flight Price"))}<br>
+                <b>Flight Per Person:</b> {fmt_money(row.get("Per Person Flight"))}<br>
+                <b>Hotel + Flight:</b> {fmt_money(row.get("Hotel + Flight"))}<br>
+                <b>Total Per Person:</b> {fmt_money(row.get("Per Person Total"))}<br>
+                <b>Daniel 70% Total:</b> {fmt_money(row.get("70/30 Split Daniel Total"))}<br>
+                <b>Kelsey 30% Total:</b> {fmt_money(row.get("70/30 Split Kelsey Total"))}<br>
+                <b>Savings:</b> {fmt_money(row.get("$ of Highest Savings"))} / {fmt_pct(row.get("Percent of Highest Savings"))}
             </div>
             """,
             unsafe_allow_html=True
         )
-    else:
-        marked_count = get_marked_count(st.session_state.board)
-        st.caption(f"Marked squares: {marked_count}/25")
+
+# --------------------------------------------------
+# Cost Comparison
+# --------------------------------------------------
+st.markdown("---")
+st.markdown("## 📊 Cost Comparison")
+
+cost_options = [
+    "Hotel + Flight",
+    "Flight Price",
+    "Per Person Flight",
+    "Per Person Total",
+    "70/30 Split Daniel Flight",
+    "70/30 Split Daniel Total",
+    "70/30 Split Kelsey Flight",
+    "70/30 Split Kelsey Total",
+    "$ of Highest Savings",
+]
+
+available_cost_options = [c for c in cost_options if c in df.columns]
+
+cost_metric = st.selectbox(
+    "Chart cost metric",
+    available_cost_options,
+    index=0 if available_cost_options else None
+)
+
+if cost_metric:
+    chart_df = df.copy()
+
+    fig_cost = px.bar(
+        chart_df.sort_values(cost_metric),
+        x=cost_metric,
+        y="Option",
+        orientation="h",
+        text=cost_metric,
+        title=f"{cost_metric} by Option"
+    )
+
+    fig_cost.update_traces(
+        texttemplate="$%{text:,.0f}",
+        textposition="outside"
+    )
+
+    fig_cost.update_layout(
+        height=420,
+        xaxis_title="Cost",
+        yaxis_title="Trip Option"
+    )
+
+    st.plotly_chart(fig_cost, use_container_width=True)
+
+# --------------------------------------------------
+# Timeline
+# --------------------------------------------------
+st.markdown("---")
+st.markdown("## 🗓️ Visual Trip Timeline")
 
 
-# -----------------------------
-# Called Word History Below Board
-# -----------------------------
-st.divider()
+def build_timeline_rows(source_df):
+    rows = []
 
-with st.expander("📜 Called Word History", expanded=False):
-    if st.session_state.called_words:
-        for index, word in enumerate(st.session_state.called_words, start=1):
-            st.write(f"{index}. {word}")
-    else:
-        st.write("No words called yet.")
+    for _, row in source_df.iterrows():
+        option = row["Option"]
+
+        timeline_parts = [
+            (
+                "Connector Outbound Flight",
+                row.get("Connecting Outgoing Departure Date"),
+                row.get("Connecting Outgoing Arrival Date"),
+            ),
+            (
+                "Connector Outbound Hotel",
+                row.get("Connecting Outgoing Hotel Check In"),
+                row.get("Connecting Outgoing Hotel Check Out"),
+            ),
+            (
+                "Main Outbound Flight",
+                row.get("Outgoing Departure Date"),
+                row.get("Outgoing Arrival Date"),
+            ),
+            (
+                "Tokyo Hotel",
+                row.get("Hotel Check In"),
+                row.get("Hotel Check Out"),
+            ),
+            (
+                "Return Flight",
+                row.get("Incoming Departure Date"),
+                row.get("Incoming Arrival Date"),
+            ),
+            (
+                "Connector Incoming Hotel",
+                row.get("Connecting Incoming Hotel Check In"),
+                row.get("Connecting Incoming Hotel Check Out"),
+            ),
+            (
+                "Connector Incoming Flight",
+                row.get("Connecting Incoming Departure Date"),
+                row.get("Connecting Incoming Arrival Date"),
+            ),
+            (
+                "Connector Hotel / Full Buffer",
+                row.get("Connecting Hotel Check In"),
+                row.get("Connecting Hotel Check Out"),
+            ),
+        ]
+
+        for segment, start, end in timeline_parts:
+            if pd.notna(start) and pd.notna(end):
+                if start == end:
+                    end = start + timedelta(hours=12)
+
+                rows.append(
+                    {
+                        "Option": option,
+                        "Segment": segment,
+                        "Start": start,
+                        "End": end,
+                    }
+                )
+
+    return pd.DataFrame(rows)
+
+
+timeline_df = build_timeline_rows(df)
+
+if not timeline_df.empty:
+    selected_options = st.multiselect(
+        "Show options",
+        sorted(timeline_df["Option"].unique()),
+        default=sorted(timeline_df["Option"].unique())
+    )
+
+    timeline_filtered = timeline_df[timeline_df["Option"].isin(selected_options)]
+
+    fig_timeline = px.timeline(
+        timeline_filtered,
+        x_start="Start",
+        x_end="End",
+        y="Option",
+        color="Segment",
+        hover_data=["Segment", "Start", "End"],
+        title="Trip Timeline"
+    )
+
+    fig_timeline.update_yaxes(autorange="reversed")
+
+    fig_timeline.update_layout(
+        height=600,
+        xaxis_title="Date / Time",
+        yaxis_title="Trip Option",
+        legend_title="Segment"
+    )
+
+    st.plotly_chart(fig_timeline, use_container_width=True)
+else:
+    st.info("No timeline data found. Check that date columns are filled correctly.")
+
+# --------------------------------------------------
+# Calendar Notes
+# --------------------------------------------------
+st.markdown("---")
+st.markdown("## 📅 Day-by-Day Calendar Notes")
+
+
+def add_calendar_event(events, date_value, option, label):
+    if pd.notna(date_value):
+        events.append(
+            {
+                "Date": date_value.date(),
+                "Time": date_value.strftime("%I:%M %p").lstrip("0"),
+                "Option": option,
+                "Plan": label,
+            }
+        )
+
+
+calendar_events = []
+
+for _, row in df.iterrows():
+    option = row["Option"]
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Connecting Outgoing Departure Date"),
+        option,
+        "Connector outbound flight departs"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Connecting Outgoing Arrival Date"),
+        option,
+        "Connector outbound flight arrives"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Connecting Outgoing Hotel Check In"),
+        option,
+        "Connector outbound hotel check-in"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Connecting Outgoing Hotel Check Out"),
+        option,
+        "Connector outbound hotel check-out"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Outgoing Departure Date"),
+        option,
+        "Main outbound flight departs"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Outgoing Arrival Date"),
+        option,
+        "Arrive in Tokyo"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Hotel Check In"),
+        option,
+        "Tokyo hotel check-in"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Hotel Check Out"),
+        option,
+        "Tokyo hotel check-out"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Incoming Departure Date"),
+        option,
+        "Return flight departs"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Incoming Arrival Date"),
+        option,
+        "Return flight arrives"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Connecting Incoming Hotel Check In"),
+        option,
+        "Connector incoming hotel check-in"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Connecting Incoming Hotel Check Out"),
+        option,
+        "Connector incoming hotel check-out"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Connecting Incoming Departure Date"),
+        option,
+        "Connector incoming flight departs"
+    )
+
+    add_calendar_event(
+        calendar_events,
+        row.get("Connecting Incoming Arrival Date"),
+        option,
+        "Final arrival home"
+    )
+
+calendar_df = pd.DataFrame(calendar_events)
+
+if not calendar_df.empty:
+    calendar_df = calendar_df.sort_values(["Date", "Time", "Option"])
+
+    selected_calendar_options = st.multiselect(
+        "Calendar options",
+        sorted(calendar_df["Option"].unique()),
+        default=sorted(calendar_df["Option"].unique())
+    )
+
+    calendar_df = calendar_df[calendar_df["Option"].isin(selected_calendar_options)]
+
+    for date, group in calendar_df.groupby("Date"):
+        st.markdown(f"### {date.strftime('%A, %B %d, %Y')}")
+        st.dataframe(
+            group[["Time", "Option", "Plan"]],
+            use_container_width=True,
+            hide_index=True
+        )
+else:
+    st.info("No calendar events found.")
+
+# --------------------------------------------------
+# Simple Decision Helper
+# --------------------------------------------------
+st.markdown("---")
+st.markdown("## 🧠 Quick Decision Helper")
+
+helper_cols = st.columns(4)
+
+with helper_cols[0]:
+    if "Hotel + Flight" in df.columns and df["Hotel + Flight"].notna().any():
+        cheapest_total = df.loc[df["Hotel + Flight"].idxmin()]
+        st.metric(
+            "Cheapest Total",
+            cheapest_total["Airline"],
+            fmt_money(cheapest_total["Hotel + Flight"])
+        )
+
+with helper_cols[1]:
+    if "Flight Price" in df.columns and df["Flight Price"].notna().any():
+        cheapest_flight = df.loc[df["Flight Price"].idxmin()]
+        st.metric(
+            "Cheapest Flight",
+            cheapest_flight["Airline"],
+            fmt_money(cheapest_flight["Flight Price"])
+        )
+
+with helper_cols[2]:
+    if "Per Person Total" in df.columns and df["Per Person Total"].notna().any():
+        best_pp = df.loc[df["Per Person Total"].idxmin()]
+        st.metric(
+            "Lowest Per Person",
+            best_pp["Airline"],
+            fmt_money(best_pp["Per Person Total"])
+        )
+
+with helper_cols[3]:
+    if "$ of Highest Savings" in df.columns and df["$ of Highest Savings"].notna().any():
+        best_savings = df.loc[df["$ of Highest Savings"].idxmax()]
+        st.metric(
+            "Highest Savings",
+            best_savings["Airline"],
+            fmt_money(best_savings["$ of Highest Savings"])
+        )
+
+# --------------------------------------------------
+# Raw Data
+# --------------------------------------------------
+st.markdown("---")
+st.markdown("## 🔍 Raw Cleaned Data")
+
+with st.expander("View cleaned table"):
+    st.dataframe(df, use_container_width=True)
