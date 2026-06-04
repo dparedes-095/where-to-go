@@ -514,16 +514,16 @@ if not timeline_df.empty:
     )
 
     fig_timeline.update_layout(
-    height=650,
-    xaxis_title="Date / Time",
-    yaxis_title="",
-    legend_title="",
-    legend=dict(
-        orientation="h",
-        yanchor="top",
-        y=-0.18,
-        xanchor="center",
-        x=0.5,
+        height=650,
+        xaxis_title="Date / Time",
+        yaxis_title="",
+        legend_title="",
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.18,
+            xanchor="center",
+            x=0.5,
         ),
         margin=dict(l=20, r=20, t=60, b=120),
     )
@@ -533,193 +533,255 @@ else:
     st.info("No timeline data found. Check that date columns are filled correctly.")
 
 # --------------------------------------------------
-# Calendar Notes
+# Trip-Specific Calendar Notes
 # --------------------------------------------------
 st.markdown("---")
-st.markdown("## 📅 Day-by-Day Calendar Notes")
+st.markdown("## 📅 Trip Day-by-Day Plan")
+
+st.caption("Pick one trip option to see a cleaner day-by-day itinerary.")
+
+trip_options = df["Short Option"].tolist()
+
+selected_trip = st.selectbox(
+    "Choose trip option",
+    trip_options,
+    index=0
+)
+
+selected_row = df[df["Short Option"] == selected_trip].iloc[0]
+
+st.markdown(f"### {selected_row['Option']}")
 
 
-def add_calendar_event(events, date_value, option, label):
+def add_trip_event(events, date_value, label, category):
     if pd.notna(date_value):
         events.append(
             {
                 "Date": date_value.date(),
                 "Time": date_value.strftime("%I:%M %p").lstrip("0"),
-                "Option": option,
                 "Plan": label,
+                "Category": category,
             }
         )
 
 
-calendar_events = []
+def get_category_style(category):
+    styles = {
+        "Connector Flight": {
+            "border": "#3b82f6",
+            "background": "rgba(59, 130, 246, 0.12)",
+            "badge_bg": "rgba(59, 130, 246, 0.22)",
+        },
+        "Main Flight": {
+            "border": "#8b5cf6",
+            "background": "rgba(139, 92, 246, 0.12)",
+            "badge_bg": "rgba(139, 92, 246, 0.22)",
+        },
+        "Connector Hotel": {
+            "border": "#f59e0b",
+            "background": "rgba(245, 158, 11, 0.12)",
+            "badge_bg": "rgba(245, 158, 11, 0.22)",
+        },
+        "Tokyo Stay": {
+            "border": "#22c55e",
+            "background": "rgba(34, 197, 94, 0.12)",
+            "badge_bg": "rgba(34, 197, 94, 0.22)",
+        },
+    }
 
-for _, row in df.iterrows():
-    option = row["Option"]
-
-    add_calendar_event(
-        calendar_events,
-        row.get("Connecting Outgoing Departure Date"),
-        option,
-        "Connector outbound flight departs"
+    return styles.get(
+        category,
+        {
+            "border": "rgba(120,120,120,0.35)",
+            "background": "rgba(250,250,250,0.035)",
+            "badge_bg": "rgba(250,250,250,0.08)",
+        },
     )
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Connecting Outgoing Arrival Date"),
-        option,
-        "Connector outbound flight arrives"
-    )
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Connecting Outgoing Hotel Check In"),
-        option,
-        "Connector outbound hotel check-in"
-    )
+trip_events = []
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Connecting Outgoing Hotel Check Out"),
-        option,
-        "Connector outbound hotel check-out"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Connecting Outgoing Departure Date"),
+    "Connector outbound flight departs",
+    "Connector Flight"
+)
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Outgoing Departure Date"),
-        option,
-        "Main outbound flight departs"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Connecting Outgoing Arrival Date"),
+    "Connector outbound flight arrives",
+    "Connector Flight"
+)
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Outgoing Arrival Date"),
-        option,
-        "Arrive in Tokyo"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Connecting Outgoing Hotel Check In"),
+    "Connector outbound hotel check-in",
+    "Connector Hotel"
+)
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Hotel Check In"),
-        option,
-        "Tokyo hotel check-in"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Connecting Outgoing Hotel Check Out"),
+    "Connector outbound hotel check-out",
+    "Connector Hotel"
+)
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Hotel Check Out"),
-        option,
-        "Tokyo hotel check-out"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Outgoing Departure Date"),
+    "Main outbound flight departs",
+    "Main Flight"
+)
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Incoming Departure Date"),
-        option,
-        "Return flight departs"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Outgoing Arrival Date"),
+    "Arrive in Tokyo",
+    "Main Flight"
+)
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Incoming Arrival Date"),
-        option,
-        "Return flight arrives"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Hotel Check In"),
+    "Tokyo hotel check-in",
+    "Tokyo Stay"
+)
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Connecting Incoming Hotel Check In"),
-        option,
-        "Connector incoming hotel check-in"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Hotel Check Out"),
+    "Tokyo hotel check-out",
+    "Tokyo Stay"
+)
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Connecting Incoming Hotel Check Out"),
-        option,
-        "Connector incoming hotel check-out"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Incoming Departure Date"),
+    "Return flight departs",
+    "Main Flight"
+)
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Connecting Incoming Departure Date"),
-        option,
-        "Connector incoming flight departs"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Incoming Arrival Date"),
+    "Return flight arrives",
+    "Main Flight"
+)
 
-    add_calendar_event(
-        calendar_events,
-        row.get("Connecting Incoming Arrival Date"),
-        option,
-        "Final arrival home"
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Connecting Incoming Hotel Check In"),
+    "Connector incoming hotel check-in",
+    "Connector Hotel"
+)
 
-calendar_df = pd.DataFrame(calendar_events)
+add_trip_event(
+    trip_events,
+    selected_row.get("Connecting Incoming Hotel Check Out"),
+    "Connector incoming hotel check-out",
+    "Connector Hotel"
+)
 
-if not calendar_df.empty:
-    calendar_df = calendar_df.sort_values(["Date", "Time", "Option"])
+add_trip_event(
+    trip_events,
+    selected_row.get("Connecting Incoming Departure Date"),
+    "Connector incoming flight departs",
+    "Connector Flight"
+)
 
-    selected_calendar_options = st.multiselect(
-        "Calendar options",
-        sorted(calendar_df["Option"].unique()),
-        default=sorted(calendar_df["Option"].unique())
-    )
+add_trip_event(
+    trip_events,
+    selected_row.get("Connecting Incoming Arrival Date"),
+    "Final arrival home",
+    "Connector Flight"
+)
 
-    calendar_df = calendar_df[calendar_df["Option"].isin(selected_calendar_options)]
+trip_calendar_df = pd.DataFrame(trip_events)
 
-    for date, group in calendar_df.groupby("Date"):
+if not trip_calendar_df.empty:
+    trip_calendar_df = trip_calendar_df.sort_values(["Date", "Time"])
+
+    summary_cols = st.columns(4)
+
+    with summary_cols[0]:
+        st.metric(
+            "Flight Price",
+            fmt_money(selected_row.get("Flight Price"))
+        )
+
+    with summary_cols[1]:
+        st.metric(
+            "Hotel + Flight",
+            fmt_money(selected_row.get("Hotel + Flight"))
+        )
+
+    with summary_cols[2]:
+        st.metric(
+            "Per Person Total",
+            fmt_money(selected_row.get("Per Person Total"))
+        )
+
+    with summary_cols[3]:
+        st.metric(
+            "Savings",
+            fmt_money(selected_row.get("$ of Highest Savings"))
+        )
+
+    st.markdown("#### Daily Plan")
+
+    for date, group in trip_calendar_df.groupby("Date"):
         st.markdown(f"### {date.strftime('%A, %B %d, %Y')}")
-        st.dataframe(
-            group[["Time", "Option", "Plan"]],
-            use_container_width=True,
-            hide_index=True
-        )
+
+        for _, event in group.iterrows():
+            style = get_category_style(event["Category"])
+
+            st.markdown(
+                f"""
+                <div style="
+                    border-left: 6px solid {style["border"]};
+                    border-top: 1px solid rgba(120,120,120,0.20);
+                    border-right: 1px solid rgba(120,120,120,0.20);
+                    border-bottom: 1px solid rgba(120,120,120,0.20);
+                    border-radius: 12px;
+                    padding: 12px 14px;
+                    margin-bottom: 8px;
+                    background: {style["background"]};
+                ">
+                    <div style="
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        gap: 12px;
+                        margin-bottom: 5px;
+                    ">
+                        <div style="font-size: 0.85rem; opacity: 0.75;">
+                            {event["Time"]}
+                        </div>
+                        <div style="
+                            font-size: 0.75rem;
+                            font-weight: 700;
+                            padding: 3px 8px;
+                            border-radius: 999px;
+                            background: {style["badge_bg"]};
+                            white-space: nowrap;
+                        ">
+                            {event["Category"]}
+                        </div>
+                    </div>
+                    <div style="font-size: 1rem; font-weight: 600;">
+                        {event["Plan"]}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
 else:
-    st.info("No calendar events found.")
+    st.info("No calendar events found for this trip.")
 
-# --------------------------------------------------
-# Simple Decision Helper
-# --------------------------------------------------
-st.markdown("---")
-st.markdown("## 🧠 Quick Decision Helper")
-
-helper_cols = st.columns(4)
-
-with helper_cols[0]:
-    if "Hotel + Flight" in df.columns and df["Hotel + Flight"].notna().any():
-        cheapest_total = df.loc[df["Hotel + Flight"].idxmin()]
-        st.metric(
-            "Cheapest Total",
-            cheapest_total["Airline"],
-            fmt_money(cheapest_total["Hotel + Flight"])
-        )
-
-with helper_cols[1]:
-    if "Flight Price" in df.columns and df["Flight Price"].notna().any():
-        cheapest_flight = df.loc[df["Flight Price"].idxmin()]
-        st.metric(
-            "Cheapest Flight",
-            cheapest_flight["Airline"],
-            fmt_money(cheapest_flight["Flight Price"])
-        )
-
-with helper_cols[2]:
-    if "Per Person Total" in df.columns and df["Per Person Total"].notna().any():
-        best_pp = df.loc[df["Per Person Total"].idxmin()]
-        st.metric(
-            "Lowest Per Person",
-            best_pp["Airline"],
-            fmt_money(best_pp["Per Person Total"])
-        )
-
-with helper_cols[3]:
-    if "$ of Highest Savings" in df.columns and df["$ of Highest Savings"].notna().any():
-        best_savings = df.loc[df["$ of Highest Savings"].idxmax()]
-        st.metric(
-            "Highest Savings",
-            best_savings["Airline"],
-            fmt_money(best_savings["$ of Highest Savings"])
-        )
 
 # --------------------------------------------------
 # Raw Data
