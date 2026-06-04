@@ -76,11 +76,12 @@ uploaded_file = st.sidebar.file_uploader(
 # --------------------------------------------------
 # Default Data
 # --------------------------------------------------
-sample_data = """Airline\tTravel Tier\tConnecting Outgoing Departure Date\tConnecting Outgoing Arrival Date\tOutgoing Departure Date\tOutgoing Arrival Date\tIncoming Departure Date\tIncoming Arrival Date\tConnecting Incoming Departure Date\tConnecting Incoming  Arrival Date\tHotel Check In\tHotel Check Out\tConnecting Outgoing Hotel Check In\tConnecting Outgoing Hotel Check Out\tConnecting Incoing Hotel Check In\tConnecting Incoing Hotel Check Out\tConnecting Hotel Price Max\tHypothetical Hotel Price Max\tConnecting Hotel Check In\tConnecting Hotel Check Out\tDirect Flight Price\tConnecting Flight Price\tFlight Price\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey\t$ of Highest Savings\tPercent of Highest Savings\tHotel + Flight\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey
-Japan Airlines (Chicago)\tPremium Economy\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$4,193.06\t\t$4,193.06\t$2,096.53\t$2,935.14\t$1,257.92\t$6,775.94\t61.77%\t$8,782.66\t$4,391.33\t$6,147.86\t$2,634.80
-Delta (Minniapolis)\tPremium Economy\t2/6 6:40\t2/6 9:16\t2/6 10:45\t2/7 14:35\t2/17 16:45\t2/17 14:55\t2/17 16:55\t2/17 14:26\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$4,483.85\t\t$4,483.85\t$2,241.93\t$3,138.70\t$1,345.16\t$6,485.15\t59.12%\t$9,073.45\t$4,536.73\t$6,351.42\t$2,722.04
-Zipair (San Fransisco)\t"Business" Class\t2/5 6:00\t2/5 16:01\t2/6 15:45\t2/7 19:55\t2/17 21:25\t2/17 19:55\t2/18 6:00\t2/18 12:36\t2/7\t2/17\t2/5\t2/6\t2/17\t2/18\t$410.00\t$4,999.60\t2/6\t2/18\t$6,786.76\t$1,076.48\t$7,863.24\t$3,931.62\t$5,504.27\t$2,358.97\t$3,105.76\t28.31%\t$11,786.36\t$5,893.18\t$8,250.45\t$3,535.91
-Japan Airlines (Chicago)\tBusiness Class\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$10,969.00\t\t$10,969.00\t$5,484.50\t$7,678.30\t$3,290.70\t$0.00\t\t$15,558.60\t$7,779.30\t$10,891.02\t$4,667.58
+sample_data = """Airline\tTravel Tier\tConnecting Outgoing Departure Date\tConnecting Outgoing Arrival Date\tOutgoing Departure Date\tOutgoing Arrival Date\tIncoming Departure Date\tIncoming Arrival Date\tConnecting Incoming Departure Date\tConnecting Incoming  Arrival Date\tHotel Check In\tHotel Check Out\tConnecting Outgoing Hotel Check In\tConnecting Outgoing Hotel Check Out\tConnecting Incoing Hotel Check In\tConnecting Incoing Hotel Check Out\tConnecting Hotel Price Max\tHypothetical Hotel Price Max\tConnecting Hotel Check In\tConnecting Hotel Check Out\tDirect Flight Price\tAMEX Discount\tDirect Flight Price (Discounted)\tConnecting Flight Price\tFlight Price\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey\t$ of Highest Savings\tPercent of Highest Savings\tHotel + Flight\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey
+Japan Airlines (Chicago)\tPremium Economy\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$4,853.06\t$660.00\t$4,193.06\t\t$4,193.06\t$2,096.53\t$2,935.14\t$1,257.92\t$6,775.94\t61.77%\t$8,782.66\t$4,391.33\t$6,147.86\t$2,634.80
+Delta (Minniapolis)\tPremium Economy\t2/6 6:40\t2/6 9:16\t2/6 10:45\t2/7 14:35\t2/17 16:45\t2/17 14:55\t2/17 16:55\t2/17 14:26\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$5,143.85\t$660.00\t$4,483.85\t\t$4,483.85\t$2,241.93\t$3,138.70\t$1,345.16\t$6,485.15\t59.12%\t$9,073.45\t$4,536.73\t$6,351.42\t$2,722.04
+Zipair (San Fransisco)\t"Business" Class\t2/5 6:00\t2/5 16:01\t2/6 15:45\t2/7 19:55\t2/17 21:25\t2/17 19:55\t2/18 6:00\t2/18 12:36\t2/7\t2/17\t2/5\t2/6\t2/17\t2/18\t$410.00\t$4,999.60\t2/6\t2/18\t$6,786.76\t\t$6,786.76\t$1,093.60\t$7,880.36\t$3,940.18\t$5,516.25\t$2,364.11\t$3,088.64\t28.16%\t$11,786.36\t$5,893.18\t$8,250.45\t$3,535.91
+Japan Airlines (Chicago)\tMixed\t\t\t2/6 15:40\t2/7 22:00\t2/17 17:00\t2/17 13:40\t\t\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$7,683.00\t$660.00\t$7,023.00\t\t$7,023.00\t$3,511.50\t$4,916.10\t$2,106.90\t$3,946.00\t35.97%\t$11,612.60\t$5,806.30\t$8,128.82\t$3,483.78
+Japan Airlines (Chicago)\tBusiness Class\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$11,629.00\t$660.00\t$10,969.00\t\t$10,969.00\t$5,484.50\t$7,678.30\t$3,290.70\t$0.00\t\t$15,558.60\t$7,779.30\t$10,891.02\t$4,667.58
 """
 
 with st.expander("Paste / edit trip data", expanded=False):
@@ -177,6 +178,7 @@ def make_short_option_label(airline, travel_tier):
         "Premium Economy": "Prem Econ",
         "Business Class": "Business",
         "Business": "Business",
+        "Mixed": "Mixed",
     }
 
     short_airline = airline_map.get(airline_clean, airline_clean)
@@ -191,8 +193,12 @@ def normalize_columns(df):
     - typo cleanup
     - duplicate pandas columns like Per Person and Per Person.1
     - double spaces in headers
+    - blank trailing columns from pasted spreadsheet data
     """
     df.columns = [str(c).strip().replace("  ", " ") for c in df.columns]
+
+    # Drop blank/extra pasted columns like Unnamed: 34, Unnamed: 35, etc.
+    df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
 
     rename_map = {
         # Common typo fixes
@@ -242,6 +248,8 @@ money_cols = [
     "Connecting Hotel Price Max",
     "Hypothetical Hotel Price Max",
     "Direct Flight Price",
+    "AMEX Discount",
+    "Direct Flight Price (Discounted)",
     "Connecting Flight Price",
     "Flight Price",
     "Per Person Flight",
@@ -802,7 +810,6 @@ if not trip_calendar_df.empty:
 
 else:
     st.info("No calendar events found for this trip.")
-
 
 # --------------------------------------------------
 # Raw Data
