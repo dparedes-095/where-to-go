@@ -553,14 +553,15 @@ selected_row = df[df["Short Option"] == selected_trip].iloc[0]
 st.markdown(f"### {selected_row['Option']}")
 
 
-def add_trip_event(events, date_value, label, category):
+def add_trip_event(events, date_value, label, category, sort_order, display_time=None):
     if pd.notna(date_value):
         events.append(
             {
                 "Date": date_value.date(),
-                "Time": date_value.strftime("%I:%M %p").lstrip("0"),
+                "Time": display_time if display_time else date_value.strftime("%I:%M %p").lstrip("0"),
                 "Plan": label,
                 "Category": category,
+                "Sort Order": sort_order,
             }
         )
 
@@ -605,104 +606,124 @@ add_trip_event(
     trip_events,
     selected_row.get("Connecting Outgoing Departure Date"),
     "Connector outbound flight departs",
-    "Connector Flight"
+    "Connector Flight",
+    10
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Connecting Outgoing Arrival Date"),
     "Connector outbound flight arrives",
-    "Connector Flight"
+    "Connector Flight",
+    20
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Connecting Outgoing Hotel Check In"),
     "Connector outbound hotel check-in",
-    "Connector Hotel"
+    "Connector Hotel",
+    30,
+    "Check-in day"
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Connecting Outgoing Hotel Check Out"),
     "Connector outbound hotel check-out",
-    "Connector Hotel"
+    "Connector Hotel",
+    40,
+    "Check-out day"
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Outgoing Departure Date"),
     "Main outbound flight departs",
-    "Main Flight"
+    "Main Flight",
+    50
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Outgoing Arrival Date"),
     "Arrive in Tokyo",
-    "Main Flight"
+    "Main Flight",
+    60
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Hotel Check In"),
     "Tokyo hotel check-in",
-    "Tokyo Stay"
+    "Tokyo Stay",
+    70,
+    "Check-in day"
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Hotel Check Out"),
     "Tokyo hotel check-out",
-    "Tokyo Stay"
+    "Tokyo Stay",
+    80,
+    "Check-out day"
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Incoming Departure Date"),
     "Return flight departs",
-    "Main Flight"
+    "Main Flight",
+    90
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Incoming Arrival Date"),
     "Return flight arrives",
-    "Main Flight"
+    "Main Flight",
+    100
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Connecting Incoming Hotel Check In"),
     "Connector incoming hotel check-in",
-    "Connector Hotel"
+    "Connector Hotel",
+    110,
+    "Check-in day"
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Connecting Incoming Hotel Check Out"),
     "Connector incoming hotel check-out",
-    "Connector Hotel"
+    "Connector Hotel",
+    120,
+    "Check-out day"
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Connecting Incoming Departure Date"),
     "Connector incoming flight departs",
-    "Connector Flight"
+    "Connector Flight",
+    130
 )
 
 add_trip_event(
     trip_events,
     selected_row.get("Connecting Incoming Arrival Date"),
     "Final arrival home",
-    "Connector Flight"
+    "Connector Flight",
+    140
 )
 
 trip_calendar_df = pd.DataFrame(trip_events)
 
 if not trip_calendar_df.empty:
-    trip_calendar_df = trip_calendar_df.sort_values(["Date", "Time"])
+    trip_calendar_df = trip_calendar_df.sort_values(["Date", "Sort Order"])
 
     summary_cols = st.columns(4)
 
