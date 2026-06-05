@@ -77,12 +77,13 @@ uploaded_file = st.sidebar.file_uploader(
 # Default Data
 # --------------------------------------------------
 sample_data = """Airline\tTravel Tier\tConnecting Outgoing Departure Date\tConnecting Outgoing Arrival Date\tOutgoing Departure Date\tOutgoing Arrival Date\tIncoming Departure Date\tIncoming Arrival Date\tConnecting Incoming Departure Date\tConnecting Incoming  Arrival Date\tHotel Check In\tHotel Check Out\tConnecting Outgoing Hotel Check In\tConnecting Outgoing Hotel Check Out\tConnecting Incoming Hotel Check In\tConnecting Incoming Hotel Check Out\tConnecting Hotel Price Max\tHypothetical Hotel Price Max\tDirect Flight Price\tAMEX Discount\tDirect Flight Price (Discounted)\tConnecting Flight Price\tFlight Price\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey\t$ of Highest Savings\tPercent of Highest Savings\tHotel + Flight\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey
-Japan Airlines (Chicago)\tPremium Economy\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$4,853.06\t$660.00\t$4,193.06\t\t$4,193.06\t$2,096.53\t$2,935.14\t$1,257.92\t$6,775.94\t61.77%\t$8,782.66\t$4,391.33\t$6,147.86\t$2,634.80
+Japan Airlines (Chicago)\tPremium Economy\t2/6 14:10\t2/6 16:21\t2/6 17:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$4,853.06\t$660.00\t$4,193.06\t\t$4,193.06\t$2,096.53\t$2,935.14\t$1,257.92\t$6,775.94\t61.77%\t$8,782.66\t$4,391.33\t$6,147.86\t$2,634.80
 Delta (Minneapolis)\tPremium Economy\t2/6 6:40\t2/6 9:16\t2/6 10:45\t2/7 14:35\t2/17 16:45\t2/17 14:55\t2/17 16:55\t2/17 14:26\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$5,143.85\t$660.00\t$4,483.85\t\t$4,483.85\t$2,241.93\t$3,138.70\t$1,345.16\t$6,485.15\t59.12%\t$9,073.45\t$4,536.73\t$6,351.42\t$2,722.04
 Zipair (San Francisco)\t"Business" Class\t2/6 7:10\t2/6 12:55\t2/6 15:45\t2/7 19:55\t2/17 21:25\t2/17 19:55\t2/17 23:10\t2/18 11:25\t2/7\t2/17\t\t\t2/17\t2/18\t$0.00\t$4,589.60\t$6,786.76\t\t$6,786.76\t$1,132.80\t$7,919.56\t$3,959.78\t$5,543.69\t$2,375.87\t$3,049.44\t27.80%\t$11,376.36\t$5,688.18\t$7,963.45\t$3,412.91
-Japan Airlines (Chicago)\tMixed JAL\t\t\t2/6 15:40\t2/7 22:00\t2/17 17:00\t2/17 13:40\t\t\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$7,681.00\t$660.00\t$7,021.00\t\t$7,021.00\t$3,510.50\t$4,914.70\t$2,106.30\t$3,948.00\t35.99%\t$11,610.60\t$5,805.30\t$8,127.42\t$3,483.18
+Japan Airlines (Chicago)\tMixed JAL\t\t\t2/6 17:40\t2/7 22:00\t2/17 17:00\t2/17 13:40\t\t\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$7,681.00\t$660.00\t$7,021.00\t\t$7,021.00\t$3,510.50\t$4,914.70\t$2,106.30\t$3,948.00\t35.99%\t$11,610.60\t$5,805.30\t$8,127.42\t$3,483.18
 Japan/ZIP Airlines (Chicago/San Francisco)\tBusiness Class\t2/6 7:10\t2/6 12:55\t2/6 15:45\t2/7 19:55\t2/17 17:00\t2/17 13:40\t\t\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$8,349.00\t$660.00\t$7,689.00\t$546.40\t$8,235.40\t$4,117.70\t$5,764.78\t$2,470.62\t$2,733.60\t24.92%\t$12,278.60\t$6,139.30\t$8,595.02\t$3,683.58
-Japan Airlines (Chicago)\tBusiness Class\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$11,629.00\t$660.00\t$10,969.00\t\t$10,969.00\t$5,484.50\t$7,678.30\t$3,290.70\t$0.00\t\t$15,558.60\t$7,779.30\t$10,891.02\t$4,667.58
+Japan Airlines (Chicago)\tBusiness Class\t2/6 14:10\t2/6 16:21\t2/6 17:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$11,629.00\t$660.00\t$10,969.00\t\t$10,969.00\t$5,484.50\t$7,678.30\t$3,290.70\t$0.00\t0.00%\t$15,558.60\t$7,779.30\t$10,891.02\t$4,667.58
+Delta (Dallas)\tFirst Class\t2/4 8:30\t2/4 11:11\t2/4 14:15\t2/5 17:45\t2/16 16:50\t2/16 14:55\t2/16 20:05\t2/16 21:38\t2/5\t2/16\t\t\t\t\t\t$4,589.60\t$10,722.00\t$660.00\t$10,062.00\t\t$10,062.00\t$5,031.00\t$7,043.40\t$3,018.60\t$907.00\t8.27%\t$14,651.60\t$7,325.80\t$10,256.12\t$4,395.48
 """
 
 with st.expander("Paste / edit trip data", expanded=False):
@@ -90,7 +91,7 @@ with st.expander("Paste / edit trip data", expanded=False):
         "Trip data",
         value=sample_data,
         height=260,
-        key="trip_data_v6"
+        key="trip_data_v7"
     )
 
 # --------------------------------------------------
@@ -182,6 +183,7 @@ def make_short_option_label(airline, travel_tier):
         "Business": "Business",
         "Mixed": "Mixed",
         "Mixed JAL": "Mixed JAL",
+        "First Class": "First",
     }
 
     short_airline = airline_map.get(airline_clean, airline_clean)
