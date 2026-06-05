@@ -76,19 +76,21 @@ uploaded_file = st.sidebar.file_uploader(
 # --------------------------------------------------
 # Default Data
 # --------------------------------------------------
-sample_data = """Airline\tTravel Tier\tConnecting Outgoing Departure Date\tConnecting Outgoing Arrival Date\tOutgoing Departure Date\tOutgoing Arrival Date\tIncoming Departure Date\tIncoming Arrival Date\tConnecting Incoming Departure Date\tConnecting Incoming  Arrival Date\tHotel Check In\tHotel Check Out\tConnecting Outgoing Hotel Check In\tConnecting Outgoing Hotel Check Out\tConnecting Incoing Hotel Check In\tConnecting Incoing Hotel Check Out\tConnecting Hotel Price Max\tHypothetical Hotel Price Max\tConnecting Hotel Check In\tConnecting Hotel Check Out\tDirect Flight Price\tAMEX Discount\tDirect Flight Price (Discounted)\tConnecting Flight Price\tFlight Price\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey\t$ of Highest Savings\tPercent of Highest Savings\tHotel + Flight\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey
-Japan Airlines (Chicago)\tPremium Economy\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$4,853.06\t$660.00\t$4,193.06\t\t$4,193.06\t$2,096.53\t$2,935.14\t$1,257.92\t$6,775.94\t61.77%\t$8,782.66\t$4,391.33\t$6,147.86\t$2,634.80
-Delta (Minniapolis)\tPremium Economy\t2/6 6:40\t2/6 9:16\t2/6 10:45\t2/7 14:35\t2/17 16:45\t2/17 14:55\t2/17 16:55\t2/17 14:26\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$5,143.85\t$660.00\t$4,483.85\t\t$4,483.85\t$2,241.93\t$3,138.70\t$1,345.16\t$6,485.15\t59.12%\t$9,073.45\t$4,536.73\t$6,351.42\t$2,722.04
-Zipair (San Fransisco)\t"Business" Class\t2/5 6:00\t2/5 16:01\t2/6 15:45\t2/7 19:55\t2/17 21:25\t2/17 19:55\t2/18 6:00\t2/18 12:36\t2/7\t2/17\t2/5\t2/6\t2/17\t2/18\t$410.00\t$4,999.60\t2/6\t2/18\t$6,786.76\t\t$6,786.76\t$1,093.60\t$7,880.36\t$3,940.18\t$5,516.25\t$2,364.11\t$3,088.64\t28.16%\t$11,786.36\t$5,893.18\t$8,250.45\t$3,535.91
-Japan Airlines (Chicago)\tMixed\t\t\t2/6 15:40\t2/7 22:00\t2/17 17:00\t2/17 13:40\t\t\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$7,683.00\t$660.00\t$7,023.00\t\t$7,023.00\t$3,511.50\t$4,916.10\t$2,106.90\t$3,946.00\t35.97%\t$11,612.60\t$5,806.30\t$8,128.82\t$3,483.78
-Japan Airlines (Chicago)\tBusiness Class\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t\t\t$11,629.00\t$660.00\t$10,969.00\t\t$10,969.00\t$5,484.50\t$7,678.30\t$3,290.70\t$0.00\t\t$15,558.60\t$7,779.30\t$10,891.02\t$4,667.58
+sample_data = """Airline\tTravel Tier\tConnecting Outgoing Departure Date\tConnecting Outgoing Arrival Date\tOutgoing Departure Date\tOutgoing Arrival Date\tIncoming Departure Date\tIncoming Arrival Date\tConnecting Incoming Departure Date\tConnecting Incoming  Arrival Date\tHotel Check In\tHotel Check Out\tConnecting Outgoing Hotel Check In\tConnecting Outgoing Hotel Check Out\tConnecting Incoming Hotel Check In\tConnecting Incoming Hotel Check Out\tConnecting Hotel Price Max\tHypothetical Hotel Price Max\tDirect Flight Price\tAMEX Discount\tDirect Flight Price (Discounted)\tConnecting Flight Price\tFlight Price\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey\t$ of Highest Savings\tPercent of Highest Savings\tHotel + Flight\tPer Person\t70/30 Split Daniel\t70/30 Split Kelsey
+Japan Airlines (Chicago)\tPremium Economy\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$4,853.06\t$660.00\t$4,193.06\t\t$4,193.06\t$2,096.53\t$2,935.14\t$1,257.92\t$6,775.94\t61.77%\t$8,782.66\t$4,391.33\t$6,147.86\t$2,634.80
+Delta (Minneapolis)\tPremium Economy\t2/6 6:40\t2/6 9:16\t2/6 10:45\t2/7 14:35\t2/17 16:45\t2/17 14:55\t2/17 16:55\t2/17 14:26\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$5,143.85\t$660.00\t$4,483.85\t\t$4,483.85\t$2,241.93\t$3,138.70\t$1,345.16\t$6,485.15\t59.12%\t$9,073.45\t$4,536.73\t$6,351.42\t$2,722.04
+Zipair (San Francisco)\t"Business" Class\t2/6 7:10\t2/6 12:55\t2/6 15:45\t2/7 19:55\t2/17 21:25\t2/17 19:55\t2/17 23:10\t2/18 11:25\t2/7\t2/17\t\t\t2/17\t2/18\t$0.00\t$4,589.60\t$6,786.76\t\t$6,786.76\t$1,132.80\t$7,919.56\t$3,959.78\t$5,543.69\t$2,375.87\t$3,049.44\t27.80%\t$11,376.36\t$5,688.18\t$7,963.45\t$3,412.91
+Japan Airlines (Chicago)\tMixed JAL\t\t\t2/6 15:40\t2/7 22:00\t2/17 17:00\t2/17 13:40\t\t\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$7,681.00\t$660.00\t$7,021.00\t\t$7,021.00\t$3,510.50\t$4,914.70\t$2,106.30\t$3,948.00\t35.99%\t$11,610.60\t$5,805.30\t$8,127.42\t$3,483.18
+Japan/ZIP Airlines (Chicago/San Francisco)\tBusiness Class\t2/6 7:10\t2/6 12:55\t2/6 15:45\t2/7 19:55\t2/17 17:00\t2/17 13:40\t\t\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$8,349.00\t$660.00\t$7,689.00\t$546.40\t$8,235.40\t$4,117.70\t$5,764.78\t$2,470.62\t$2,733.60\t24.92%\t$12,278.60\t$6,139.30\t$8,595.02\t$3,683.58
+Japan Airlines (Chicago)\tBusiness Class\t2/6 14:10\t2/6 16:21\t2/6 15:40\t2/7 22:00\t2/17 10:50\t2/17 7:35\t2/17 9:25\t2/17 13:10\t2/7\t2/17\t\t\t\t\t\t$4,589.60\t$11,629.00\t$660.00\t$10,969.00\t\t$10,969.00\t$5,484.50\t$7,678.30\t$3,290.70\t$0.00\t\t$15,558.60\t$7,779.30\t$10,891.02\t$4,667.58
 """
 
 with st.expander("Paste / edit trip data", expanded=False):
     pasted_data = st.text_area(
         "Trip data",
         value=sample_data,
-        height=260
+        height=260,
+        key="trip_data_v6"
     )
 
 # --------------------------------------------------
@@ -164,7 +166,6 @@ def make_short_option_label(airline, travel_tier):
     airline = str(airline).strip()
     travel_tier = str(travel_tier).strip().replace('"', "")
 
-    # Remove airport/city note in parentheses
     airline_clean = re.sub(r"\s*\(.*?\)", "", airline).strip()
 
     airline_map = {
@@ -172,6 +173,7 @@ def make_short_option_label(airline, travel_tier):
         "Zipair": "ZIPAIR",
         "ZIPAIR": "ZIPAIR",
         "Delta": "Delta",
+        "Japan/ZIP Airlines": "JAL/ZIP",
     }
 
     tier_map = {
@@ -179,6 +181,7 @@ def make_short_option_label(airline, travel_tier):
         "Business Class": "Business",
         "Business": "Business",
         "Mixed": "Mixed",
+        "Mixed JAL": "Mixed JAL",
     }
 
     short_airline = airline_map.get(airline_clean, airline_clean)
@@ -188,39 +191,21 @@ def make_short_option_label(airline, travel_tier):
 
 
 def normalize_columns(df):
-    """
-    Handles:
-    - typo cleanup
-    - duplicate pandas columns like Per Person and Per Person.1
-    - double spaces in headers
-    - blank trailing columns from pasted spreadsheet data
-    """
     df.columns = [str(c).strip().replace("  ", " ") for c in df.columns]
 
     # Drop blank/extra pasted columns like Unnamed: 34, Unnamed: 35, etc.
     df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
 
     rename_map = {
-        # Common typo fixes
         "Connecting Outgoing Arival Date": "Connecting Outgoing Arrival Date",
         "Outgoing Arival Date": "Outgoing Arrival Date",
         "Incoing Departure Date": "Incoming Departure Date",
         "Incoing Arival Date": "Incoming Arrival Date",
-
-        # New incoming connector fields
         "Connecting Incoming Arival Date": "Connecting Incoming Arrival Date",
         "Connecting Incoming Arrival Date.1": "Connecting Incoming Arrival Date",
-
-        # Your current typo spelling
-        "Connecting Incoing Hotel Check In": "Connecting Incoming Hotel Check In",
-        "Connecting Incoing Hotel Check Out": "Connecting Incoming Hotel Check Out",
-
-        # Old naming support
         "Connecting Return Departure Date": "Connecting Incoming Departure Date",
         "Connecting Return Arrival Date": "Connecting Incoming Arrival Date",
         "Connecting Return Arival Date": "Connecting Incoming Arrival Date",
-
-        # Duplicate cost columns from pandas
         "Per Person": "Per Person Flight",
         "Per Person.1": "Per Person Total",
         "70/30 Split Daniel": "70/30 Split Daniel Flight",
@@ -229,8 +214,7 @@ def normalize_columns(df):
         "70/30 Split Kelsey.1": "70/30 Split Kelsey Total",
     }
 
-    df = df.rename(columns=rename_map)
-    return df
+    return df.rename(columns=rename_map)
 
 
 # --------------------------------------------------
@@ -284,8 +268,6 @@ date_cols = [
     "Connecting Outgoing Hotel Check Out",
     "Connecting Incoming Hotel Check In",
     "Connecting Incoming Hotel Check Out",
-    "Connecting Hotel Check In",
-    "Connecting Hotel Check Out",
 ]
 
 for col in date_cols:
@@ -463,11 +445,6 @@ def build_timeline_rows(source_df):
                 "Connector Incoming Flight",
                 row.get("Connecting Incoming Departure Date"),
                 row.get("Connecting Incoming Arrival Date"),
-            ),
-            (
-                "Connector Hotel / Full Buffer",
-                row.get("Connecting Hotel Check In"),
-                row.get("Connecting Hotel Check Out"),
             ),
         ]
 
