@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import streamlit.components.v1 as components
 from io import StringIO
 from datetime import datetime, timedelta
 import re
+import calendar
 
 # --------------------------------------------------
 # Page Config
@@ -306,512 +308,894 @@ df["Short Option"] = df.apply(
     axis=1
 )
 
-# --------------------------------------------------
-# Trip Option Cards
-# --------------------------------------------------
-st.markdown("## 🧾 Trip Options")
-
-sort_options = [
-    "Hotel + Flight",
-    "Flight Price",
-    "Per Person Total",
-    "$ of Highest Savings",
-    "Percent of Highest Savings",
-]
-
-available_sort_options = [c for c in sort_options if c in df.columns]
-
-sort_choice = st.selectbox(
-    "Sort options by",
-    available_sort_options,
-    index=0 if available_sort_options else None
-)
-
-if sort_choice:
-    ascending = sort_choice not in ["$ of Highest Savings", "Percent of Highest Savings"]
-    df_display = df.sort_values(sort_choice, ascending=ascending, na_position="last")
-else:
-    df_display = df.copy()
-
-card_cols = st.columns(2)
-
-for i, (_, row) in enumerate(df_display.iterrows()):
-    with card_cols[i % 2]:
-        airline = row.get("Airline", "Unknown Airline")
-        tier = row.get("Travel Tier", "Unknown Tier")
-
-        st.markdown(
-            f"""
-            <div style="
-                border: 1px solid rgba(120,120,120,0.35);
-                border-radius: 16px;
-                padding: 18px;
-                margin-bottom: 16px;
-                background: rgba(250,250,250,0.04);
-            ">
-                <h3 style="margin-bottom: 4px;">{airline}</h3>
-                <p style="margin-top: 0; opacity: .75;">{tier}</p>
-                <hr>
-                <b>Flight Price:</b> {fmt_money(row.get("Flight Price"))}<br>
-                <b>Flight Per Person:</b> {fmt_money(row.get("Per Person Flight"))}<br>
-                <b>Hotel + Flight:</b> {fmt_money(row.get("Hotel + Flight"))}<br>
-                <b>Total Per Person:</b> {fmt_money(row.get("Per Person Total"))}<br>
-                <b>Daniel 70% Total:</b> {fmt_money(row.get("70/30 Split Daniel Total"))}<br>
-                <b>Kelsey 30% Total:</b> {fmt_money(row.get("70/30 Split Kelsey Total"))}<br>
-                <b>Savings:</b> {fmt_money(row.get("$ of Highest Savings"))} / {fmt_pct(row.get("Percent of Highest Savings"))}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
 
 # --------------------------------------------------
-# Cost Comparison
+# Main App Tabs
 # --------------------------------------------------
-st.markdown("---")
-st.markdown("## 📊 Cost Comparison")
+overview_tab, hotel_tab, raw_tab = st.tabs([
+    "✈️ Trip Comparator",
+    "🏨 Hotel Calendar",
+    "🔍 Raw Data",
+])
 
-cost_options = [
-    "Hotel + Flight",
-    "Flight Price",
-    "Per Person Flight",
-    "Per Person Total",
-    "70/30 Split Daniel Flight",
-    "70/30 Split Daniel Total",
-    "70/30 Split Kelsey Flight",
-    "70/30 Split Kelsey Total",
-    "$ of Highest Savings",
-]
+with overview_tab:
+    # --------------------------------------------------
+    # Trip Option Cards
+    # --------------------------------------------------
+    st.markdown("## 🧾 Trip Options")
 
-available_cost_options = [c for c in cost_options if c in df.columns]
+    sort_options = [
+        "Hotel + Flight",
+        "Flight Price",
+        "Per Person Total",
+        "$ of Highest Savings",
+        "Percent of Highest Savings",
+    ]
 
-cost_metric = st.selectbox(
-    "Chart cost metric",
-    available_cost_options,
-    index=0 if available_cost_options else None
-)
+    available_sort_options = [c for c in sort_options if c in df.columns]
 
-if cost_metric:
-    chart_df = df.copy()
-
-    fig_cost = px.bar(
-        chart_df.sort_values(cost_metric),
-        x=cost_metric,
-        y="Option",
-        orientation="h",
-        text=cost_metric,
-        title=f"{cost_metric} by Option"
+    sort_choice = st.selectbox(
+        "Sort options by",
+        available_sort_options,
+        index=0 if available_sort_options else None
     )
 
-    fig_cost.update_traces(
-        texttemplate="$%{text:,.0f}",
-        textposition="outside"
-    )
+    if sort_choice:
+        ascending = sort_choice not in ["$ of Highest Savings", "Percent of Highest Savings"]
+        df_display = df.sort_values(sort_choice, ascending=ascending, na_position="last")
+    else:
+        df_display = df.copy()
 
-    fig_cost.update_layout(
-        height=420,
-        xaxis_title="Cost",
-        yaxis_title="Trip Option"
-    )
+    card_cols = st.columns(2)
 
-    st.plotly_chart(fig_cost, use_container_width=True)
-
-# --------------------------------------------------
-# Timeline
-# --------------------------------------------------
-st.markdown("---")
-st.markdown("## 🗓️ Visual Trip Timeline")
-
-
-def build_timeline_rows(source_df):
-    rows = []
-
-    for _, row in source_df.iterrows():
-        option = row["Short Option"]
-        full_option = row["Option"]
-
-        timeline_parts = [
-            (
-                "Connector Outbound Flight",
-                row.get("Connecting Outgoing Departure Date"),
-                row.get("Connecting Outgoing Arrival Date"),
-            ),
-            (
-                "Connector Outbound Hotel",
-                row.get("Connecting Outgoing Hotel Check In"),
-                row.get("Connecting Outgoing Hotel Check Out"),
-            ),
-            (
-                "Main Outbound Flight",
-                row.get("Outgoing Departure Date"),
-                row.get("Outgoing Arrival Date"),
-            ),
-            (
-                "Tokyo Hotel",
-                row.get("Hotel Check In"),
-                row.get("Hotel Check Out"),
-            ),
-            (
-                "Return Flight",
-                row.get("Incoming Departure Date"),
-                row.get("Incoming Arrival Date"),
-            ),
-            (
-                "Connector Incoming Hotel",
-                row.get("Connecting Incoming Hotel Check In"),
-                row.get("Connecting Incoming Hotel Check Out"),
-            ),
-            (
-                "Connector Incoming Flight",
-                row.get("Connecting Incoming Departure Date"),
-                row.get("Connecting Incoming Arrival Date"),
-            ),
-        ]
-
-        for segment, start, end in timeline_parts:
-            if pd.notna(start) and pd.notna(end):
-                if start == end:
-                    end = start + timedelta(hours=12)
-
-                rows.append(
-                    {
-                        "Option": option,
-                        "Full Option": full_option,
-                        "Segment": segment,
-                        "Start": start,
-                        "End": end,
-                    }
-                )
-
-    return pd.DataFrame(rows)
-
-
-timeline_df = build_timeline_rows(df)
-
-if not timeline_df.empty:
-    selected_options = st.multiselect(
-        "Show options",
-        sorted(timeline_df["Option"].unique()),
-        default=sorted(timeline_df["Option"].unique())
-    )
-
-    timeline_filtered = timeline_df[timeline_df["Option"].isin(selected_options)]
-
-    fig_timeline = px.timeline(
-        timeline_filtered,
-        x_start="Start",
-        x_end="End",
-        y="Option",
-        color="Segment",
-        hover_data={
-            "Full Option": True,
-            "Segment": True,
-            "Start": True,
-            "End": True,
-            "Option": False,
-        },
-        title="Trip Timeline"
-    )
-
-    fig_timeline.update_yaxes(
-        autorange="reversed",
-        title="",
-    )
-
-    fig_timeline.update_layout(
-        height=650,
-        xaxis_title="Date / Time",
-        yaxis_title="",
-        legend_title="",
-        legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=-0.18,
-            xanchor="center",
-            x=0.5,
-        ),
-        margin=dict(l=20, r=20, t=60, b=120),
-    )
-
-    st.plotly_chart(fig_timeline, use_container_width=True)
-else:
-    st.info("No timeline data found. Check that date columns are filled correctly.")
-
-# --------------------------------------------------
-# Trip-Specific Calendar Notes
-# --------------------------------------------------
-st.markdown("---")
-st.markdown("## 📅 Trip Day-by-Day Plan")
-
-st.caption("Pick one trip option to see a cleaner day-by-day itinerary.")
-
-trip_options = df["Short Option"].tolist()
-
-selected_trip = st.selectbox(
-    "Choose trip option",
-    trip_options,
-    index=0
-)
-
-selected_row = df[df["Short Option"] == selected_trip].iloc[0]
-
-st.markdown(f"### {selected_row['Option']}")
-
-
-def add_trip_event(events, date_value, label, category, sort_order, display_time=None):
-    if pd.notna(date_value):
-        events.append(
-            {
-                "Date": date_value.date(),
-                "Time": display_time if display_time else date_value.strftime("%I:%M %p").lstrip("0"),
-                "Plan": label,
-                "Category": category,
-                "Sort Order": sort_order,
-            }
-        )
-
-
-def get_category_style(category):
-    styles = {
-        "Connector Flight": {
-            "border": "#3b82f6",
-            "background": "rgba(59, 130, 246, 0.12)",
-            "badge_bg": "rgba(59, 130, 246, 0.22)",
-        },
-        "Main Flight": {
-            "border": "#8b5cf6",
-            "background": "rgba(139, 92, 246, 0.12)",
-            "badge_bg": "rgba(139, 92, 246, 0.22)",
-        },
-        "Connector Hotel": {
-            "border": "#f59e0b",
-            "background": "rgba(245, 158, 11, 0.12)",
-            "badge_bg": "rgba(245, 158, 11, 0.22)",
-        },
-        "Tokyo Stay": {
-            "border": "#22c55e",
-            "background": "rgba(34, 197, 94, 0.12)",
-            "badge_bg": "rgba(34, 197, 94, 0.22)",
-        },
-    }
-
-    return styles.get(
-        category,
-        {
-            "border": "rgba(120,120,120,0.35)",
-            "background": "rgba(250,250,250,0.035)",
-            "badge_bg": "rgba(250,250,250,0.08)",
-        },
-    )
-
-
-trip_events = []
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Connecting Outgoing Departure Date"),
-    "Connector outbound flight departs",
-    "Connector Flight",
-    10
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Connecting Outgoing Arrival Date"),
-    "Connector outbound flight arrives",
-    "Connector Flight",
-    20
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Connecting Outgoing Hotel Check In"),
-    "Connector outbound hotel check-in",
-    "Connector Hotel",
-    30,
-    "Check-in day"
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Connecting Outgoing Hotel Check Out"),
-    "Connector outbound hotel check-out",
-    "Connector Hotel",
-    40,
-    "Check-out day"
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Outgoing Departure Date"),
-    "Main outbound flight departs",
-    "Main Flight",
-    50
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Outgoing Arrival Date"),
-    "Arrive in Tokyo",
-    "Main Flight",
-    60
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Hotel Check In"),
-    "Tokyo hotel check-in",
-    "Tokyo Stay",
-    70,
-    "Check-in day"
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Hotel Check Out"),
-    "Tokyo hotel check-out",
-    "Tokyo Stay",
-    80,
-    "Check-out day"
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Incoming Departure Date"),
-    "Return flight departs",
-    "Main Flight",
-    90
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Incoming Arrival Date"),
-    "Return flight arrives",
-    "Main Flight",
-    100
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Connecting Incoming Hotel Check In"),
-    "Connector incoming hotel check-in",
-    "Connector Hotel",
-    110,
-    "Check-in day"
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Connecting Incoming Hotel Check Out"),
-    "Connector incoming hotel check-out",
-    "Connector Hotel",
-    120,
-    "Check-out day"
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Connecting Incoming Departure Date"),
-    "Connector incoming flight departs",
-    "Connector Flight",
-    130
-)
-
-add_trip_event(
-    trip_events,
-    selected_row.get("Connecting Incoming Arrival Date"),
-    "Final arrival home",
-    "Connector Flight",
-    140
-)
-
-trip_calendar_df = pd.DataFrame(trip_events)
-
-if not trip_calendar_df.empty:
-    trip_calendar_df = trip_calendar_df.sort_values(["Date", "Sort Order"])
-
-    summary_cols = st.columns(4)
-
-    with summary_cols[0]:
-        st.metric(
-            "Flight Price",
-            fmt_money(selected_row.get("Flight Price"))
-        )
-
-    with summary_cols[1]:
-        st.metric(
-            "Hotel + Flight",
-            fmt_money(selected_row.get("Hotel + Flight"))
-        )
-
-    with summary_cols[2]:
-        st.metric(
-            "Per Person Total",
-            fmt_money(selected_row.get("Per Person Total"))
-        )
-
-    with summary_cols[3]:
-        st.metric(
-            "Savings",
-            fmt_money(selected_row.get("$ of Highest Savings"))
-        )
-
-    st.markdown("#### Daily Plan")
-
-    for date, group in trip_calendar_df.groupby("Date"):
-        st.markdown(f"### {date.strftime('%A, %B %d, %Y')}")
-
-        for _, event in group.iterrows():
-            style = get_category_style(event["Category"])
+    for i, (_, row) in enumerate(df_display.iterrows()):
+        with card_cols[i % 2]:
+            airline = row.get("Airline", "Unknown Airline")
+            tier = row.get("Travel Tier", "Unknown Tier")
 
             st.markdown(
                 f"""
                 <div style="
-                    border-left: 6px solid {style["border"]};
-                    border-top: 1px solid rgba(120,120,120,0.20);
-                    border-right: 1px solid rgba(120,120,120,0.20);
-                    border-bottom: 1px solid rgba(120,120,120,0.20);
-                    border-radius: 12px;
-                    padding: 12px 14px;
-                    margin-bottom: 8px;
-                    background: {style["background"]};
+                    border: 1px solid rgba(120,120,120,0.35);
+                    border-radius: 16px;
+                    padding: 18px;
+                    margin-bottom: 16px;
+                    background: rgba(250,250,250,0.04);
                 ">
-                    <div style="
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        gap: 12px;
-                        margin-bottom: 5px;
-                    ">
-                        <div style="font-size: 0.85rem; opacity: 0.75;">
-                            {event["Time"]}
-                        </div>
-                        <div style="
-                            font-size: 0.75rem;
-                            font-weight: 700;
-                            padding: 3px 8px;
-                            border-radius: 999px;
-                            background: {style["badge_bg"]};
-                            white-space: nowrap;
-                        ">
-                            {event["Category"]}
-                        </div>
-                    </div>
-                    <div style="font-size: 1rem; font-weight: 600;">
-                        {event["Plan"]}
-                    </div>
+                    <h3 style="margin-bottom: 4px;">{airline}</h3>
+                    <p style="margin-top: 0; opacity: .75;">{tier}</p>
+                    <hr>
+                    <b>Flight Price:</b> {fmt_money(row.get("Flight Price"))}<br>
+                    <b>Flight Per Person:</b> {fmt_money(row.get("Per Person Flight"))}<br>
+                    <b>Hotel + Flight:</b> {fmt_money(row.get("Hotel + Flight"))}<br>
+                    <b>Total Per Person:</b> {fmt_money(row.get("Per Person Total"))}<br>
+                    <b>Daniel 70% Total:</b> {fmt_money(row.get("70/30 Split Daniel Total"))}<br>
+                    <b>Kelsey 30% Total:</b> {fmt_money(row.get("70/30 Split Kelsey Total"))}<br>
+                    <b>Savings:</b> {fmt_money(row.get("$ of Highest Savings"))} / {fmt_pct(row.get("Percent of Highest Savings"))}
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
-else:
-    st.info("No calendar events found for this trip.")
+    # --------------------------------------------------
+    # Cost Comparison
+    # --------------------------------------------------
+    st.markdown("---")
+    st.markdown("## 📊 Cost Comparison")
 
-# --------------------------------------------------
-# Raw Data
-# --------------------------------------------------
-st.markdown("---")
-st.markdown("## 🔍 Raw Cleaned Data")
+    cost_options = [
+        "Hotel + Flight",
+        "Flight Price",
+        "Per Person Flight",
+        "Per Person Total",
+        "70/30 Split Daniel Flight",
+        "70/30 Split Daniel Total",
+        "70/30 Split Kelsey Flight",
+        "70/30 Split Kelsey Total",
+        "$ of Highest Savings",
+    ]
 
-with st.expander("View cleaned table"):
-    st.dataframe(df, use_container_width=True)
+    available_cost_options = [c for c in cost_options if c in df.columns]
+
+    cost_metric = st.selectbox(
+        "Chart cost metric",
+        available_cost_options,
+        index=0 if available_cost_options else None
+    )
+
+    if cost_metric:
+        chart_df = df.copy()
+
+        fig_cost = px.bar(
+            chart_df.sort_values(cost_metric),
+            x=cost_metric,
+            y="Option",
+            orientation="h",
+            text=cost_metric,
+            title=f"{cost_metric} by Option"
+        )
+
+        fig_cost.update_traces(
+            texttemplate="$%{text:,.0f}",
+            textposition="outside"
+        )
+
+        fig_cost.update_layout(
+            height=420,
+            xaxis_title="Cost",
+            yaxis_title="Trip Option"
+        )
+
+        st.plotly_chart(fig_cost, use_container_width=True)
+
+    # --------------------------------------------------
+    # Timeline
+    # --------------------------------------------------
+    st.markdown("---")
+    st.markdown("## 🗓️ Visual Trip Timeline")
+
+
+    def build_timeline_rows(source_df):
+        rows = []
+
+        for _, row in source_df.iterrows():
+            option = row["Short Option"]
+            full_option = row["Option"]
+
+            timeline_parts = [
+                (
+                    "Connector Outbound Flight",
+                    row.get("Connecting Outgoing Departure Date"),
+                    row.get("Connecting Outgoing Arrival Date"),
+                ),
+                (
+                    "Connector Outbound Hotel",
+                    row.get("Connecting Outgoing Hotel Check In"),
+                    row.get("Connecting Outgoing Hotel Check Out"),
+                ),
+                (
+                    "Main Outbound Flight",
+                    row.get("Outgoing Departure Date"),
+                    row.get("Outgoing Arrival Date"),
+                ),
+                (
+                    "Tokyo Hotel",
+                    row.get("Hotel Check In"),
+                    row.get("Hotel Check Out"),
+                ),
+                (
+                    "Return Flight",
+                    row.get("Incoming Departure Date"),
+                    row.get("Incoming Arrival Date"),
+                ),
+                (
+                    "Connector Incoming Hotel",
+                    row.get("Connecting Incoming Hotel Check In"),
+                    row.get("Connecting Incoming Hotel Check Out"),
+                ),
+                (
+                    "Connector Incoming Flight",
+                    row.get("Connecting Incoming Departure Date"),
+                    row.get("Connecting Incoming Arrival Date"),
+                ),
+            ]
+
+            for segment, start, end in timeline_parts:
+                if pd.notna(start) and pd.notna(end):
+                    if start == end:
+                        end = start + timedelta(hours=12)
+
+                    rows.append(
+                        {
+                            "Option": option,
+                            "Full Option": full_option,
+                            "Segment": segment,
+                            "Start": start,
+                            "End": end,
+                        }
+                    )
+
+        return pd.DataFrame(rows)
+
+
+    timeline_df = build_timeline_rows(df)
+
+    if not timeline_df.empty:
+        selected_options = st.multiselect(
+            "Show options",
+            sorted(timeline_df["Option"].unique()),
+            default=sorted(timeline_df["Option"].unique())
+        )
+
+        timeline_filtered = timeline_df[timeline_df["Option"].isin(selected_options)]
+
+        fig_timeline = px.timeline(
+            timeline_filtered,
+            x_start="Start",
+            x_end="End",
+            y="Option",
+            color="Segment",
+            hover_data={
+                "Full Option": True,
+                "Segment": True,
+                "Start": True,
+                "End": True,
+                "Option": False,
+            },
+            title="Trip Timeline"
+        )
+
+        fig_timeline.update_yaxes(
+            autorange="reversed",
+            title="",
+        )
+
+        fig_timeline.update_layout(
+            height=650,
+            xaxis_title="Date / Time",
+            yaxis_title="",
+            legend_title="",
+            legend=dict(
+                orientation="h",
+                yanchor="top",
+                y=-0.18,
+                xanchor="center",
+                x=0.5,
+            ),
+            margin=dict(l=20, r=20, t=60, b=120),
+        )
+
+        st.plotly_chart(fig_timeline, use_container_width=True)
+    else:
+        st.info("No timeline data found. Check that date columns are filled correctly.")
+
+    # --------------------------------------------------
+    # Trip-Specific Calendar Notes
+    # --------------------------------------------------
+    st.markdown("---")
+    st.markdown("## 📅 Trip Day-by-Day Plan")
+
+    st.caption("Pick one trip option to see a cleaner day-by-day itinerary.")
+
+    trip_options = df["Short Option"].tolist()
+
+    selected_trip = st.selectbox(
+        "Choose trip option",
+        trip_options,
+        index=0
+    )
+
+    selected_row = df[df["Short Option"] == selected_trip].iloc[0]
+
+    st.markdown(f"### {selected_row['Option']}")
+
+
+    def add_trip_event(events, date_value, label, category, sort_order, display_time=None):
+        if pd.notna(date_value):
+            events.append(
+                {
+                    "Date": date_value.date(),
+                    "Time": display_time if display_time else date_value.strftime("%I:%M %p").lstrip("0"),
+                    "Plan": label,
+                    "Category": category,
+                    "Sort Order": sort_order,
+                }
+            )
+
+
+    def get_category_style(category):
+        styles = {
+            "Connector Flight": {
+                "border": "#3b82f6",
+                "background": "rgba(59, 130, 246, 0.12)",
+                "badge_bg": "rgba(59, 130, 246, 0.22)",
+            },
+            "Main Flight": {
+                "border": "#8b5cf6",
+                "background": "rgba(139, 92, 246, 0.12)",
+                "badge_bg": "rgba(139, 92, 246, 0.22)",
+            },
+            "Connector Hotel": {
+                "border": "#f59e0b",
+                "background": "rgba(245, 158, 11, 0.12)",
+                "badge_bg": "rgba(245, 158, 11, 0.22)",
+            },
+            "Tokyo Stay": {
+                "border": "#22c55e",
+                "background": "rgba(34, 197, 94, 0.12)",
+                "badge_bg": "rgba(34, 197, 94, 0.22)",
+            },
+        }
+
+        return styles.get(
+            category,
+            {
+                "border": "rgba(120,120,120,0.35)",
+                "background": "rgba(250,250,250,0.035)",
+                "badge_bg": "rgba(250,250,250,0.08)",
+            },
+        )
+
+
+    trip_events = []
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Connecting Outgoing Departure Date"),
+        "Connector outbound flight departs",
+        "Connector Flight",
+        10
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Connecting Outgoing Arrival Date"),
+        "Connector outbound flight arrives",
+        "Connector Flight",
+        20
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Connecting Outgoing Hotel Check In"),
+        "Connector outbound hotel check-in",
+        "Connector Hotel",
+        30,
+        "Check-in day"
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Connecting Outgoing Hotel Check Out"),
+        "Connector outbound hotel check-out",
+        "Connector Hotel",
+        40,
+        "Check-out day"
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Outgoing Departure Date"),
+        "Main outbound flight departs",
+        "Main Flight",
+        50
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Outgoing Arrival Date"),
+        "Arrive in Tokyo",
+        "Main Flight",
+        60
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Hotel Check In"),
+        "Tokyo hotel check-in",
+        "Tokyo Stay",
+        70,
+        "Check-in day"
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Hotel Check Out"),
+        "Tokyo hotel check-out",
+        "Tokyo Stay",
+        80,
+        "Check-out day"
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Incoming Departure Date"),
+        "Return flight departs",
+        "Main Flight",
+        90
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Incoming Arrival Date"),
+        "Return flight arrives",
+        "Main Flight",
+        100
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Connecting Incoming Hotel Check In"),
+        "Connector incoming hotel check-in",
+        "Connector Hotel",
+        110,
+        "Check-in day"
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Connecting Incoming Hotel Check Out"),
+        "Connector incoming hotel check-out",
+        "Connector Hotel",
+        120,
+        "Check-out day"
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Connecting Incoming Departure Date"),
+        "Connector incoming flight departs",
+        "Connector Flight",
+        130
+    )
+
+    add_trip_event(
+        trip_events,
+        selected_row.get("Connecting Incoming Arrival Date"),
+        "Final arrival home",
+        "Connector Flight",
+        140
+    )
+
+    trip_calendar_df = pd.DataFrame(trip_events)
+
+    if not trip_calendar_df.empty:
+        trip_calendar_df = trip_calendar_df.sort_values(["Date", "Sort Order"])
+
+        summary_cols = st.columns(4)
+
+        with summary_cols[0]:
+            st.metric(
+                "Flight Price",
+                fmt_money(selected_row.get("Flight Price"))
+            )
+
+        with summary_cols[1]:
+            st.metric(
+                "Hotel + Flight",
+                fmt_money(selected_row.get("Hotel + Flight"))
+            )
+
+        with summary_cols[2]:
+            st.metric(
+                "Per Person Total",
+                fmt_money(selected_row.get("Per Person Total"))
+            )
+
+        with summary_cols[3]:
+            st.metric(
+                "Savings",
+                fmt_money(selected_row.get("$ of Highest Savings"))
+            )
+
+        st.markdown("#### Daily Plan")
+
+        for date, group in trip_calendar_df.groupby("Date"):
+            st.markdown(f"### {date.strftime('%A, %B %d, %Y')}")
+
+            for _, event in group.iterrows():
+                style = get_category_style(event["Category"])
+
+                st.markdown(
+                    f"""
+                    <div style="
+                        border-left: 6px solid {style["border"]};
+                        border-top: 1px solid rgba(120,120,120,0.20);
+                        border-right: 1px solid rgba(120,120,120,0.20);
+                        border-bottom: 1px solid rgba(120,120,120,0.20);
+                        border-radius: 12px;
+                        padding: 12px 14px;
+                        margin-bottom: 8px;
+                        background: {style["background"]};
+                    ">
+                        <div style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            gap: 12px;
+                            margin-bottom: 5px;
+                        ">
+                            <div style="font-size: 0.85rem; opacity: 0.75;">
+                                {event["Time"]}
+                            </div>
+                            <div style="
+                                font-size: 0.75rem;
+                                font-weight: 700;
+                                padding: 3px 8px;
+                                border-radius: 999px;
+                                background: {style["badge_bg"]};
+                                white-space: nowrap;
+                            ">
+                                {event["Category"]}
+                            </div>
+                        </div>
+                        <div style="font-size: 1rem; font-weight: 600;">
+                            {event["Plan"]}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+    else:
+        st.info("No calendar events found for this trip.")
+
+
+
+with hotel_tab:
+    st.markdown("## 🏨 Hotel Calendar")
+    st.caption("Hotel-only card calendar for the Tokyo hotel split, Disney stay, and Valentine’s Day park-max plan.")
+
+    # --------------------------------------------------
+    # Editable Hotel / Trip Blocks
+    # --------------------------------------------------
+    # Prices are placeholders/planning values where noted.
+    # End dates are shown on the calendar as checkout days.
+    calendar_items = [
+        {
+            "Name": "Hilton",
+            "Type": "Hotel",
+            "Start": datetime(DEFAULT_YEAR, 2, 5, 11, 0),
+            "End": datetime(DEFAULT_YEAR, 2, 8, 15, 0),
+            "Price": 1128.94,
+            "Label": "Hilton stay",
+            "Subtext": "$1,128.94 total",
+            "Emoji": "🏨",
+            "Color": "hilton",
+        },
+        {
+            "Name": "New City 1 Hotel",
+            "Type": "Hotel Placeholder",
+            "Start": datetime(DEFAULT_YEAR, 2, 8, 11, 0),
+            "End": datetime(DEFAULT_YEAR, 2, 10, 15, 0),
+            "Price": None,
+            "Label": "New City 1 Hotel",
+            "Subtext": "Placeholder • 2 nights",
+            "Emoji": "🏙️",
+            "Color": "city1",
+        },
+        {
+            "Name": "New City 2 Hotel",
+            "Type": "Hotel Placeholder",
+            "Start": datetime(DEFAULT_YEAR, 2, 10, 11, 0),
+            "End": datetime(DEFAULT_YEAR, 2, 13, 15, 0),
+            "Price": None,
+            "Label": "New City 2 Hotel",
+            "Subtext": "Placeholder • 3 nights",
+            "Emoji": "🌆",
+            "Color": "city2",
+        },
+        {
+            "Name": "Disney Hotel",
+            "Type": "Disney Hotel",
+            "Start": datetime(DEFAULT_YEAR, 2, 13, 11, 0),
+            "End": datetime(DEFAULT_YEAR, 2, 15, 15, 0),
+            "Price": 1200.00,
+            "Label": "Disney Hotel",
+            "Subtext": "$1,200 placeholder • Valentine’s park-max",
+            "Emoji": "🏰",
+            "Color": "disney",
+        },
+        {
+            "Name": "Hilton",
+            "Type": "Hotel",
+            "Start": datetime(DEFAULT_YEAR, 2, 15, 11, 0),
+            "End": datetime(DEFAULT_YEAR, 2, 16, 15, 0),
+            "Price": 328.75,
+            "Label": "Hilton reset",
+            "Subtext": "$328.75 total",
+            "Emoji": "🏨",
+            "Color": "hilton2",
+        },
+    ]
+
+    calendar_df = pd.DataFrame(calendar_items)
+    calendar_df["Nights"] = calendar_df.apply(
+        lambda row: max((row["End"].date() - row["Start"].date()).days, 0)
+        if "Hotel" in row["Type"] else 0,
+        axis=1,
+    )
+    calendar_df["Price / Night"] = calendar_df.apply(
+        lambda row: row["Price"] / row["Nights"]
+        if pd.notna(row["Price"]) and row["Nights"] else None,
+        axis=1,
+    )
+
+    priced_hotels_df = calendar_df[
+        (calendar_df["Type"].str.contains("Hotel")) &
+        (calendar_df["Price"].notna())
+    ].copy()
+
+    total_known_hotel_cost = priced_hotels_df["Price"].sum()
+    total_known_hotel_nights = int(priced_hotels_df["Nights"].sum())
+    average_known_nightly = (
+        total_known_hotel_cost / total_known_hotel_nights
+        if total_known_hotel_nights else 0
+    )
+    disney_total = priced_hotels_df[priced_hotels_df["Name"] == "Disney Hotel"]["Price"].sum()
+    hilton_total = priced_hotels_df[priced_hotels_df["Name"] == "Hilton"]["Price"].sum()
+
+    metric_cols = st.columns(5)
+
+    with metric_cols[0]:
+        st.metric("Known hotel total", fmt_money(total_known_hotel_cost))
+
+    with metric_cols[1]:
+        st.metric("Known nights", total_known_hotel_nights)
+
+    with metric_cols[2]:
+        st.metric("Avg known nightly", fmt_money(average_known_nightly))
+
+    with metric_cols[3]:
+        st.metric("Disney placeholder", fmt_money(disney_total))
+
+    with metric_cols[4]:
+        st.metric("Known Hilton total", fmt_money(hilton_total))
+
+    st.info(
+        "Disney is set as a planning placeholder at $1,200 total for 2/13–2/15. "
+        "New City 1 and New City 2 are intentionally unpriced for now."
+    )
+
+    st.markdown("### February 2027 Overlay")
+
+    # --------------------------------------------------
+    # Calendar Helpers
+    # --------------------------------------------------
+    def fmt_hotel_time(value):
+        return value.strftime("%I:%M %p").lstrip("0")
+
+    def item_events_for_day(day_date):
+        events = []
+
+        for item in calendar_items:
+            start_date = item["Start"].date()
+            end_date = item["End"].date()
+
+            if start_date <= day_date <= end_date:
+                nights = max((end_date - start_date).days, 1)
+                nightly = item["Price"] / nights if item["Price"] is not None else None
+
+                if day_date == start_date:
+                    status = f"Check in {fmt_hotel_time(item['Start'])}"
+                elif day_date == end_date:
+                    status = f"Check out {fmt_hotel_time(item['End'])}"
+                else:
+                    status = "Stay night"
+
+                price_text = fmt_money(item["Price"]) if item["Price"] is not None else "Price TBD"
+                nightly_text = f" • {fmt_money(nightly)}/night" if nightly is not None else ""
+
+                events.append(
+                    {
+                        "text": f"{item['Emoji']} {item['Label']}",
+                        "subtext": f"{status} • {price_text}{nightly_text}",
+                        "color": item["Color"],
+                        "status": status,
+                    }
+                )
+
+        return events
+
+    cal = calendar.Calendar(firstweekday=6)  # Sunday start
+    month_days = cal.monthdatescalendar(DEFAULT_YEAR, 2)
+    weekday_labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+    calendar_html = """
+    <style>
+        .hotel-calendar-wrap {
+            border: 1px solid rgba(148,163,184,0.34);
+            border-radius: 18px;
+            overflow: hidden;
+            background: #0f172a;
+            color: #f8fafc;
+        }
+        .hotel-calendar-header {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            border-bottom: 1px solid rgba(148,163,184,0.32);
+            background: #111827;
+            color: #f8fafc;
+        }
+        .hotel-weekday {
+            padding: 10px 8px;
+            text-align: center;
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: #cbd5e1;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .hotel-calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+        }
+        .hotel-day {
+            min-height: 146px;
+            padding: 9px;
+            border-right: 1px solid rgba(148,163,184,0.22);
+            border-bottom: 1px solid rgba(148,163,184,0.22);
+            position: relative;
+            background: #0f172a;
+            color: #f8fafc;
+        }
+        .hotel-day:nth-child(7n) {
+            border-right: none;
+        }
+        .hotel-muted {
+            opacity: 0.45;
+        }
+        .hotel-day-number {
+            font-size: 0.9rem;
+            font-weight: 800;
+            margin-bottom: 7px;
+            color: #f8fafc;
+        }
+        .hotel-pill {
+            border-radius: 12px;
+            padding: 8px 9px;
+            margin-top: 6px;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.32);
+            color: #ffffff;
+        }
+        .hotel-pill-main {
+            font-weight: 850;
+            font-size: 0.82rem;
+            line-height: 1.2;
+            color: #ffffff;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.28);
+        }
+        .hotel-pill-sub {
+            margin-top: 4px;
+            font-size: 0.70rem;
+            line-height: 1.2;
+            color: rgba(255,255,255,0.92);
+        }
+        .hotel-pill.hilton {
+            border: 1px solid rgba(125,211,252,0.78);
+            background: linear-gradient(135deg, #0369a1, #1d4ed8);
+        }
+        .hotel-pill.hilton2 {
+            border: 1px solid rgba(103,232,249,0.78);
+            background: linear-gradient(135deg, #0e7490, #2563eb);
+        }
+        .hotel-pill.city1 {
+            border: 1px solid rgba(134,239,172,0.78);
+            background: linear-gradient(135deg, #15803d, #0f766e);
+        }
+        .hotel-pill.city2 {
+            border: 1px solid rgba(216,180,254,0.80);
+            background: linear-gradient(135deg, #7e22ce, #be185d);
+        }
+        .hotel-pill.disney {
+            border: 1px solid rgba(254,202,202,0.86);
+            background: linear-gradient(135deg, #dc2626, #be123c);
+        }
+        .hotel-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .hotel-chip {
+            border: 1px solid rgba(148,163,184,0.34);
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 0.78rem;
+            background: #111827;
+            color: #f8fafc;
+        }
+        @media (max-width: 760px) {
+            .hotel-day {
+                min-height: 122px;
+                padding: 6px;
+            }
+            .hotel-pill {
+                padding: 6px;
+            }
+            .hotel-pill-main {
+                font-size: 0.72rem;
+            }
+            .hotel-pill-sub {
+                font-size: 0.62rem;
+            }
+        }
+    </style>
+    <div class="hotel-chip-row">
+        <div class="hotel-chip">🏨 Hilton</div>
+        <div class="hotel-chip">🏙️ City placeholder</div>
+        <div class="hotel-chip">🏰 Disney Valentine’s stay</div>
+    </div>
+    <div class="hotel-calendar-wrap">
+        <div class="hotel-calendar-header">
+    """
+
+    for label in weekday_labels:
+        calendar_html += f'<div class="hotel-weekday">{label}</div>'
+
+    calendar_html += '</div><div class="hotel-calendar-grid">'
+
+    for week in month_days:
+        for day in week:
+            muted_class = " hotel-muted" if day.month != 2 else ""
+            calendar_html += f'<div class="hotel-day{muted_class}">'
+            calendar_html += f'<div class="hotel-day-number">{day.day}</div>'
+
+            if day.month == 2:
+                for event in item_events_for_day(day):
+                    calendar_html += f"""
+                    <div class="hotel-pill {event['color']}">
+                        <div class="hotel-pill-main">{event['text']}</div>
+                        <div class="hotel-pill-sub">{event['subtext']}</div>
+                    </div>
+                    """
+
+            calendar_html += '</div>'
+
+    calendar_html += '</div></div>'
+
+    components.html(calendar_html, height=860, scrolling=False)
+
+    # --------------------------------------------------
+    # Details + Suggested Park Logic
+    # --------------------------------------------------
+    st.markdown("### Stay Details")
+
+    details_df = calendar_df.copy()
+    details_df["Check In / Start"] = details_df["Start"].dt.strftime("%a, Feb %-d • %-I:%M %p")
+    details_df["Check Out / End"] = details_df["End"].dt.strftime("%a, Feb %-d • %-I:%M %p")
+    details_df["Total"] = details_df["Price"].apply(fmt_money)
+    details_df["Nightly"] = details_df["Price / Night"].apply(fmt_money)
+
+    st.dataframe(
+        details_df[[
+            "Name",
+            "Type",
+            "Check In / Start",
+            "Check Out / End",
+            "Nights",
+            "Total",
+            "Nightly",
+        ]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.markdown("### Valentine’s Day Park-Max Notes")
+
+    note_cols = st.columns(3)
+
+    with note_cols[0]:
+        st.markdown(
+            """
+            **2/13 — Disney Hotel check-in**  
+            Move from the city, bag drop/check in, then keep the evening flexible.
+            """
+        )
+
+    with note_cols[1]:
+        st.markdown(
+            """
+            **2/14 — Valentine’s Day**  
+            Full park-max day from the Disney hotel. This is the main reason the split stay exists.
+            """
+        )
+
+    with note_cols[2]:
+        st.markdown(
+            """
+            **2/15 — Checkout + Hilton reset**  
+            Checkout day, then move back to Hilton for the final Tokyo night.
+            """
+        )
+
+
+with raw_tab:
+    # --------------------------------------------------
+    # Raw Data
+    # --------------------------------------------------
+    st.markdown("---")
+    st.markdown("## 🔍 Raw Cleaned Data")
+
+    with st.expander("View cleaned table"):
+        st.dataframe(df, use_container_width=True)
