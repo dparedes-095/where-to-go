@@ -824,7 +824,7 @@ with overview_tab:
 
 with hotel_tab:
     st.markdown("## 🏨 Hotel Calendar")
-    st.caption("Hotel-only card calendar for the Tokyo hotel split, Disney stay, and Valentine’s Day park-max plan.")
+    st.caption("Hotel-only card calendar for the Tokyo hotel split and Valentine’s Day Hilton stay.")
 
     # --------------------------------------------------
     # Editable Hotel / Trip Blocks
@@ -866,24 +866,13 @@ with hotel_tab:
             "Color": "city2",
         },
         {
-            "Name": "Disney Hotel",
-            "Type": "Disney Hotel",
-            "Start": datetime(DEFAULT_YEAR, 2, 13, 11, 0),
-            "End": datetime(DEFAULT_YEAR, 2, 15, 15, 0),
-            "Price": 1200.00,
-            "Label": "Disney Hotel",
-            "Subtext": "$1,200 placeholder • Valentine’s park-max",
-            "Emoji": "🏰",
-            "Color": "disney",
-        },
-        {
             "Name": "Hilton",
             "Type": "Hotel",
-            "Start": datetime(DEFAULT_YEAR, 2, 15, 11, 0),
+            "Start": datetime(DEFAULT_YEAR, 2, 13, 11, 0),
             "End": datetime(DEFAULT_YEAR, 2, 16, 15, 0),
-            "Price": 328.75,
-            "Label": "Hilton reset",
-            "Subtext": "$328.75 total",
+            "Price": 982.84,
+            "Label": "Hilton stay",
+            "Subtext": "$982.84 total",
             "Emoji": "🏨",
             "Color": "hilton2",
         },
@@ -912,10 +901,9 @@ with hotel_tab:
         total_known_hotel_cost / total_known_hotel_nights
         if total_known_hotel_nights else 0
     )
-    disney_total = priced_hotels_df[priced_hotels_df["Name"] == "Disney Hotel"]["Price"].sum()
     hilton_total = priced_hotels_df[priced_hotels_df["Name"] == "Hilton"]["Price"].sum()
 
-    metric_cols = st.columns(5)
+    metric_cols = st.columns(4)
 
     with metric_cols[0]:
         st.metric("Known hotel total", fmt_money(total_known_hotel_cost))
@@ -927,13 +915,10 @@ with hotel_tab:
         st.metric("Avg known nightly", fmt_money(average_known_nightly))
 
     with metric_cols[3]:
-        st.metric("Disney placeholder", fmt_money(disney_total))
-
-    with metric_cols[4]:
         st.metric("Known Hilton total", fmt_money(hilton_total))
 
     st.info(
-        "Disney is set as a planning placeholder at $1,200 total for 2/13–2/15. "
+        "Hilton is set at $982.84 total for 2/13–2/16. "
         "New City 1 and New City 2 are intentionally unpriced for now."
     )
 
@@ -1104,7 +1089,7 @@ with hotel_tab:
     <div class="hotel-chip-row">
         <div class="hotel-chip">🏨 Hilton</div>
         <div class="hotel-chip">🏙️ City placeholder</div>
-        <div class="hotel-chip">🏰 Disney Valentine’s stay</div>
+        <div class="hotel-chip">🏨 Hilton Valentine’s stay</div>
     </div>
     <div class="hotel-calendar-wrap">
         <div class="hotel-calendar-header">
@@ -1161,15 +1146,15 @@ with hotel_tab:
         hide_index=True,
     )
 
-    st.markdown("### Valentine’s Day Park-Max Notes")
+    st.markdown("### Hotel Flow Notes")
 
     note_cols = st.columns(3)
 
     with note_cols[0]:
         st.markdown(
             """
-            **2/13 — Disney Hotel check-in**  
-            Move from the city, bag drop/check in, then keep the evening flexible.
+            **2/13 — Hilton check-in**  
+            Move from New City 2 back to Hilton, bag drop/check in, then keep the evening flexible.
             """
         )
 
@@ -1177,15 +1162,15 @@ with hotel_tab:
         st.markdown(
             """
             **2/14 — Valentine’s Day**  
-            Full park-max day from the Disney hotel. This is the main reason the split stay exists.
+            Park-max day with Hilton as the stable base instead of a Disney hotel split.
             """
         )
 
     with note_cols[2]:
         st.markdown(
             """
-            **2/15 — Checkout + Hilton reset**  
-            Checkout day, then move back to Hilton for the final Tokyo night.
+            **2/15 — Hilton stay night**  
+            No hotel move today. Cleaner logistics before the 2/16 checkout.
             """
         )
 
