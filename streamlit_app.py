@@ -6,15 +6,24 @@ from io import StringIO
 from datetime import datetime, timedelta
 import re
 import calendar
+import json
+import math
+import os
+from copy import deepcopy
+from datetime import date
+from html import escape
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+from uuid import uuid4
 
 # --------------------------------------------------
 # Page Config
 # --------------------------------------------------
 st.set_page_config(
-    page_title="Tokyo Trip Maker",
+    page_title="Tokyo Trip Comparator",
     page_icon="✈️",
-    layout="wide",
     initial_sidebar_state="collapsed",
+    layout="wide"
 )
 
 # --------------------------------------------------
@@ -266,6 +275,10 @@ cabin = "First Classic" if delta else "Choice Extra"
 st.caption(f"{carrier} · {cabin} · {'Nonstop both ways' if delta else 'Via Chicago Midway both ways'}")
 
 hotel_options = ["Option 1 — New City 1 + New City 2", "Option 2 — New City 1 only"]
+saved_plans = st.session_state.setdefault("custom_hotel_plans", {}).setdefault(DEFAULT_YEAR, {})
+hotel_options.extend(saved_plans)
+if "next_hotel_plan" in st.session_state:
+    st.session_state.hotel_plan = st.session_state.pop("next_hotel_plan")
 hotel_plan = st.radio("Japan hotel plan", hotel_options, index=0, horizontal=True, key="hotel_plan")
 two_cities = hotel_plan == hotel_options[0]
 
@@ -541,6 +554,194 @@ calendar_items.append({
         "Color": "hilton2",
     })
 
+def propose_edit(api_key, context):
+    def obj(properties):
+        return {"type": "object", "properties": properties, "required": list(properties),
+                "additionalProperties": False}
+
+    string = {"type": "string"}
+    change = obj({
+        "action": {"type": "string", "enum": ["update_stay", "add_stay", "remove_stay",
+                                              "update_activity", "add_activity", "remove_activity"]},
+        "id": string, "name": string, "start": string, "end": string,
+        "price_mode": {"type": "string", "enum": ["keep", "total", "nightly", "clear"]},
+        "amount": {"type": ["number", "null"]},
+    })
+    schema = obj({"question": string, "changes": {"type": "array", "items": change}})
+    rules = """Edit the displayed Japan plan using the request and any prior clarification.
+Return a minimal set of changes or one specific question with no changes. Preserve unrelated facts.
+Resolve names, ordinals, weekdays and relative dates against the supplied calendar. Check ALL clues:
+if City 1 does not end on the stated Saturday but City 2 does, ask which the user means.
+Two Hilton stays are distinct. 'Accordingly' means move the adjoining checkout and check-in together.
+For a clear boundary edit return two update_stay entries. If a freed night has two plausible destinations,
+ask. For splitting/merging or adding a city, update/add/remove stays together so every night is covered.
+First arrival and last departure are fixed; flights are read-only. For unsupported requests explain briefly.
+Use existing IDs for update/remove, empty id for add. Fields with no requested change are empty strings.
+Dates are ISO YYYY-MM-DD. An activity uses start for its date, end empty. Activities can be renamed or moved.
+Prices are USD. price_mode keep (amount null) preserves quoted totals on date changes; clear means unknown.
+For explicitly nightly prices use nightly; Python multiplies by nights. Do not invent prices or activities.
+When a split/merge leaves allocation of existing known costs unclear, ask. No bookings. Reply using the schema."""
+    payload = {"model": "gpt-5.4-mini", "messages": [
+        {"role": "system", "content": rules},
+        {"role": "user", "content": json.dumps(context)}],
+        "response_format": {"type": "json_schema", "json_schema": {
+            "name": "itinerary_edit", "strict": True, "schema": schema}}}
+    req = Request("https://api.openai.com/v1/chat/completions",
+                  data=json.dumps(payload).encode(), headers={"Content-Type": "application/json",
+                  "Authorization": "Bearer " + api_key})
+    with urlopen(req, timeout=45) as response:
+        message = json.load(response)["choices"][0]["message"]
+    if not message.get("content"):
+        raise ValueError("No proposed edit was returned. Please rephrase the request.")
+    return json.loads(message["content"])
+
+
+def apply_changes(plan, changes):
+    """Apply the entire proposal to a temporary copy and validate the resulting calendar."""
+    draft = deepcopy(plan)
+    original_start = plan["stays"][0]["Start"].date()
+    original_end = plan["stays"][-1]["End"].date()
+    if not changes or len(changes) > 60:
+        raise ValueError("Which stay or activity would you like to change?")
+    for edit in changes:
+        verb, kind = edit["action"].split("_", 1)
+        if kind not in ("activity", "stay") or verb not in ("add", "update", "remove"):
+            raise ValueError("Choose a hotel stay or day activity to edit.")
+        rows = draft["stays" if kind == "stay" else "activities"]
+        name = edit["name"].strip()
+        if len(name) > 160 or (verb == "add" and not name):
+            raise ValueError("What short name should this entry have?")
+        if verb == "add":
+            item = {"id": uuid4().hex}
+            if kind == "stay":
+                item.update(Type="Hotel", Emoji="🏨", Color="city1", Price=None)
+            rows.append(item)
+        else:
+            item = next((r for r in rows if r["id"] == edit["id"]), None)
+            if item is None:
+                raise ValueError("Which entry on the displayed calendar did you mean? Please give its name and date.")
+            if verb == "remove":
+                rows.remove(item)
+                continue
+        if kind == "activity":
+            if name:
+                item["name"] = name
+            if edit["start"]:
+                item["date"] = date.fromisoformat(edit["start"]).isoformat()
+            if not original_start.isoformat() <= item.get("date", "") <= original_end.isoformat():
+                raise ValueError("Which day during the Japan stay should this activity use?")
+            continue
+        if name:
+            item["Name"] = item["Label"] = name
+        for field, key, hour in [("start", "Start", 11), ("end", "End", 15)]:
+            if edit[field]:
+                clock = item[key].time() if key in item else datetime.min.replace(hour=hour).time()
+                item[key] = datetime.combine(date.fromisoformat(edit[field]), clock)
+        if "Start" not in item or "End" not in item:
+            raise ValueError("What are the check-in and checkout dates for the new stay?")
+        nights = (item["End"].date() - item["Start"].date()).days
+        mode, amount = edit["price_mode"], edit["amount"]
+        if mode in ("nightly", "total"):
+            if type(amount) not in (int, float) or not math.isfinite(amount) or amount < 0:
+                raise ValueError("What nonnegative USD price should this stay use?")
+            item["Price"] = round(amount * (nights if mode == "nightly" else 1), 2)
+        elif mode == "clear":
+            item["Price"] = None
+        elif mode != "keep" or amount is not None:
+            raise ValueError("Is that price per night or for the whole stay?")
+    stays = draft["stays"]
+    stays.sort(key=lambda s: s["Start"])
+    if not stays or stays[0]["Start"].date() != original_start or stays[-1]["End"].date() != original_end:
+        raise ValueError(f"Which hotel covers the endpoints of the Japan stay ({original_start} to {original_end})?")
+    for i, stay in enumerate(stays):
+        if stay["End"].date() <= stay["Start"].date():
+            raise ValueError(f"{stay['Name']} needs at least one night. Should that stay be removed?")
+        if i and stays[i-1]["End"].date() != stay["Start"].date():
+            raise ValueError(f"Which date should be the transfer from {stays[i-1]['Name']} to {stay['Name']}?")
+    if draft == plan:
+        raise ValueError("The calendar already matches that change. What would you like to adjust?")
+    return draft
+
+
+for index, stay in enumerate(calendar_items):
+    stay["id"] = f"stay-{index + 1}"
+baseline = saved_plans.get(hotel_plan, {"stays": calendar_items, "activities": []})
+drafts = st.session_state.setdefault("trip_drafts", {})
+scope = (DEFAULT_YEAR, hotel_plan)
+work = drafts.setdefault(scope, {"draft": None, "conversation": []})
+view_key = f"plan_view_{DEFAULT_YEAR}_{hotel_plan}"
+
+with itinerary:
+    with st.expander("Edit this trip with AI"):
+        st.caption("Edit hotel dates, stay prices, or day activities. Saved options last for this session.")
+        current = work["draft"] if work["draft"] and st.session_state.get(view_key, "Draft") == "Draft" else baseline
+        if work.get("pending_source") != current:
+            work["conversation"] = []
+        if work["conversation"]:
+            st.info(work["conversation"][-1]["question"])
+        with st.form(f"edit_{view_key}", clear_on_submit=True):
+            prompt = st.text_area("What would you change?", placeholder="Move the City 1 → City 2 transfer to February 9.")
+            submitted = st.form_submit_button("Update draft")
+        if submitted and prompt.strip():
+            work["pending_source"] = current
+            try:
+                key = os.environ.get("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+            except FileNotFoundError:
+                key = None
+            if not key:
+                st.error("Add OPENAI_API_KEY to Streamlit secrets to enable the editor.")
+            else:
+                context = {"stays": [{"id": x["id"], "hotel": x["Name"], "check_in": x["Start"].date().isoformat(),
+                            "check_out": x["End"].date().isoformat(), "check_in_weekday": x["Start"].strftime("%A"), "check_out_weekday": x["End"].strftime("%A"), "total_usd": x["Price"]} for x in current["stays"]],
+                           "activities": current["activities"], "hotel_option": hotel_plan, "flights": flights,
+                           "clarifications": work["conversation"], "request": prompt}
+                try:
+                    with st.spinner("Updating draft…"):
+                        reply = propose_edit(key, context)
+                    if reply["question"]:
+                        work["conversation"].append({"request": prompt, "question": reply["question"]})
+                        st.info(reply["question"])
+                    else:
+                        work["draft"] = apply_changes(current, reply["changes"])
+                        work["conversation"] = []
+                        st.session_state[view_key] = "Draft"
+                        st.success("Draft updated.")
+                except HTTPError as error:
+                    try:
+                        detail = json.loads(error.read()).get("error", {})
+                        reason = detail.get("code") or detail.get("type") or "unknown"
+                    except (ValueError, AttributeError):
+                        reason = "unknown"
+                    st.error(f"OpenAI HTTP {error.code} · {reason}")
+                except (ValueError, KeyError, TypeError, IndexError, OSError) as error:
+                    if isinstance(error, ValueError):
+                        question = str(error)
+                        work["conversation"].append({"request": prompt, "question": question})
+                        st.info(question)
+                    else:
+                        st.error("The response could not be processed. Please try again.")
+        if work["draft"] is not None:
+            st.caption("Draft hotel stays")
+            st.dataframe(pd.DataFrame([{
+                "Hotel": h["Name"], "Check-in": h["Start"].date(),
+                "Checkout": h["End"].date(), "Total": fmt_money(h["Price"]),
+            } for h in work["draft"]["stays"]]), hide_index=True, use_container_width=True)
+            if st.button("Save as Option " + str(3 + len(saved_plans)), key="save_" + view_key):
+                label = f"Option {3 + len(saved_plans)} — Custom plan"
+                saved_plans[label] = deepcopy(work["draft"])
+                st.session_state["next_hotel_plan"] = label
+                st.rerun()
+        if work["draft"] is not None or work["conversation"]:
+            if st.button("Discard draft", key="discard_" + view_key):
+                drafts.pop(scope)
+                st.session_state.pop(view_key, None)
+                st.rerun()
+    showing_draft = work["draft"] is not None and st.radio(
+        "Calendar version", ["Original", "Draft"], horizontal=True, key=view_key) == "Draft"
+active = work["draft"] if showing_draft else baseline
+calendar_items = active["stays"]
+activities = active["activities"]
+
 calendar_df = pd.DataFrame(calendar_items)
 calendar_df["Nights"] = calendar_df.apply(
     lambda row: max((row["End"].date() - row["Start"].date()).days, 0)
@@ -567,6 +768,10 @@ average_known_nightly = (
 hilton_total = priced_hotels_df[priced_hotels_df["Name"] == "Hilton"]["Price"].sum()
 
 
+with costs:
+    st.metric("Known Japan hotel cost · active calendar", fmt_money(total_known_hotel_cost))
+    st.caption("Spreadsheet package figures use the original hotel budget.")
+
 with itinerary:
     st.subheader("Trip calendar & day-by-day plan")
     days = [e[0] for e in events] + [d.date() for d in calendar_df["End"]]
@@ -585,6 +790,9 @@ with itinerary:
                 if start <= day <= end:
                     status = "Check in" if day == start else "Check out" if day == end else "Stay night"
                     st.write(f"{status} · {hotel['Name']}")
+            for activity in activities:
+                if activity["date"] == day.isoformat():
+                    st.text(activity["name"])
             if mode == "Full trip":
                 st.divider()
     with left:
@@ -623,6 +831,9 @@ with itinerary:
                         }
                     )
 
+            for activity in activities:
+                if activity["date"] == day_date.isoformat():
+                    events.append({"text": activity["name"], "subtext": "Day activity", "color": "flight"})
             return events
 
         cal = calendar.Calendar(firstweekday=6)  # Sunday start
@@ -756,9 +967,7 @@ with itinerary:
         </style>
         <div class="hotel-chip-row">
             <div class="hotel-chip">✈ Flights · local times</div>
-            <div class="hotel-chip">🏨 Hilton</div>
-            <div class="hotel-chip">🏙️ City placeholder</div>
-            <div class="hotel-chip">🏨 Hilton Valentine’s stay</div>
+            <div class="hotel-chip">🏨 Hotel stays</div>
         </div>
         <div class="hotel-calendar-wrap">
             <div class="hotel-calendar-header">
@@ -781,8 +990,8 @@ with itinerary:
                     for event in item_events_for_day(day) + flight_items:
                         calendar_html += f"""
                         <div class="hotel-pill {event['color']}">
-                            <div class="hotel-pill-main">{event['text']}</div>
-                            <div class="hotel-pill-sub">{event['subtext']}</div>
+                            <div class="hotel-pill-main">{escape(event['text'])}</div>
+                            <div class="hotel-pill-sub">{escape(event['subtext'])}</div>
                         </div>
                         """
 
@@ -817,33 +1026,34 @@ with itinerary:
             hide_index=True,
         )
 
-        st.markdown("### Hotel Flow Notes")
+        if not showing_draft and hotel_plan not in saved_plans:
+            st.markdown("### Hotel Flow Notes")
 
-        note_cols = st.columns(3)
+            note_cols = st.columns(3)
 
-        with note_cols[0]:
-            st.markdown(
-                f"""
-                **2/13 — Hilton check-in**  
-                Move from {"New City 2" if two_cities else "New City 1"} back to Hilton, bag drop/check in, then keep the evening flexible.
-                """
-            )
+            with note_cols[0]:
+                st.markdown(
+                    f"""
+                    **2/13 — Hilton check-in**  
+                    Move from {"New City 2" if two_cities else "New City 1"} back to Hilton, bag drop/check in, then keep the evening flexible.
+                    """
+                )
 
-        with note_cols[1]:
-            st.markdown(
-                """
-                **2/14 — Valentine’s Day**  
-                Park-max day with Hilton as the stable base instead of a Disney hotel split.
-                """
-            )
+            with note_cols[1]:
+                st.markdown(
+                    """
+                    **2/14 — Valentine’s Day**  
+                    Park-max day with Hilton as the stable base instead of a Disney hotel split.
+                    """
+                )
 
-        with note_cols[2]:
-            st.markdown(
-                """
-                **2/15 — Hilton stay night**  
-                No hotel move today. Cleaner logistics before the 2/16 checkout.
-                """
-            )
+            with note_cols[2]:
+                st.markdown(
+                    """
+                    **2/15 — Hilton stay night**  
+                    No hotel move today. Cleaner logistics before the 2/16 checkout.
+                    """
+                )
 
 
 
